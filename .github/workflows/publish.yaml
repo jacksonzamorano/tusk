@@ -25,6 +25,6 @@ jobs:
           cp LICENSE.txt tusk/LICENSE.txt
           cp LICENSE.txt tusk-derive/LICENSE.txt
       - name: Publish Tusk
-        run: cd tusk && cargo publish
+        run: cd tusk && cargo publish --allow-dirty
       - name: Publish Tusk-Derive
-        run: cd tusk-derive && cargo publish
+        run: cd tusk-derive && cargo publish --allow-dirty
