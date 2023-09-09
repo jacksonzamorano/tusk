@@ -18,7 +18,7 @@ jobs:
           override: true
       - name: Login to Cargo
         run: cargo login ${{ secrets.CARGO_KEY }}
-      - Copy README
+      - name: Copy files into Crate
         run: cp README.md tusk/README.md
         run: cp README.md tusk-derive/README.md
         run: cp LICENSE.txt tusk/LICENSE.txt
