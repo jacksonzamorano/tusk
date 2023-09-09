@@ -19,10 +19,11 @@ jobs:
       - name: Login to Cargo
         run: cargo login ${{ secrets.CARGO_KEY }}
       - name: Copy files into Crate
-        run: cp README.md tusk/README.md
-        run: cp README.md tusk-derive/README.md
-        run: cp LICENSE.txt tusk/LICENSE.txt
-        run: cp LICENSE.txt tusk-derive/LICENSE.txt
+        run: |
+          cp README.md tusk/README.md
+          cp README.md tusk-derive/README.md
+          cp LICENSE.txt tusk/LICENSE.txt
+          cp LICENSE.txt tusk-derive/LICENSE.txt
       - name: Publish Tusk
         run: cd tusk && cargo publish
       - name: Publish Tusk-Derive
