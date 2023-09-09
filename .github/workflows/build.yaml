@@ -18,4 +18,8 @@ jobs:
       - name: Build Tusk
         run: cd tusk && cargo build
       - name: Build Tusk-Derive
-        run: cd ../tusk-derive && cargo build
+        run: cd tusk-derive && cargo build
+      - name: Run Clippy on Tusk
+        run: cd tusk && cargo clippy -- -Dwarnings
+      - name: Run Clippy on Tusk-Derive
+        run: cd tusk-derive && cargo clippy -- -Dwarnings

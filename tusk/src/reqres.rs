@@ -1,5 +1,5 @@
 use super::{JsonArray, JsonObject, ToJson};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::{Display, Formatter}, matches};
 
 #[derive(Debug)]
 pub struct Request {
@@ -44,23 +44,23 @@ impl Response {
     pub fn get_header_data(&self) -> Vec<u8> {
         let mut output = String::from("HTTP/1.1 ");
         output += &self.status.http_string();
-        if self.headers.len() > 0 {
+        if !self.headers.is_empty() {
             output += "\r\n";
             output += &self.headers.iter().map(|x| {
                 let mut o = String::new();
-                o += &x.0;
+                o += x.0;
                 o += ": ";
-                o += &x.1;
-                return o;
+                o += x.1;
+                o
             }).collect::<Vec<String>>().join("\n");
         }
         output += "\r\n\r\n";
-        return output.into_bytes();
+        output.into_bytes()
     }
 
     pub fn status(mut self, status: ResponseStatusCode) -> Response {
         self.status = status;
-        return self;
+        self
     }
 
     pub fn header<S: AsRef<str>, T: AsRef<str>>(mut self, key: S, value: T) -> Response {
@@ -70,7 +70,12 @@ impl Response {
 
     // Get bytes out
     pub fn bytes(self) -> Vec<u8> {
-        return self.data;
+        self.data
+    }
+}
+impl Default for Response {
+    fn default() -> Self {
+        Response::new()
     }
 }
 
@@ -145,7 +150,7 @@ impl RouteError {
             output += "\r\nContent-Type: application/json; charset=utf-8";
         }
         output += "\r\n\r\n";
-        return output.into_bytes();
+        output.into_bytes()
     }
 }
 
@@ -309,7 +314,7 @@ impl BodyContents {
             BodyContents::TYPE_OCTET_STREAM => BodyContents::Binary(data),
             BodyContents::TYPE_JSON | BodyContents::TYPE_LD_JSON => {
                 let contents_string = String::from_utf8(data).unwrap();
-                if contents_string.chars().next().unwrap() == '[' {
+                if contents_string.starts_with('[') {
                     BodyContents::JsonArray(JsonArray::from_string(contents_string))
                 } else {
                     BodyContents::JsonObject(JsonObject::from_string(contents_string))
@@ -384,20 +389,18 @@ impl RequestType {
     }
 
     pub fn is_any(&self) -> bool {
-        match self {
-            RequestType::Any => true,
-            _ => false
-        }
+        matches!(self, RequestType::Any)
     }
-
-    pub fn to_string(&self) -> String {
-        match self {
+}
+impl Display for RequestType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", match self {
             RequestType::Get => RequestType::GET_TYPE.to_string(),
             RequestType::Post => RequestType::POST_TYPE.to_string(),
             RequestType::Put => RequestType::PUT_TYPE.to_string(),
             RequestType::Delete => RequestType::DELETE_TYPE.to_string(),
             RequestType::Patch => RequestType::PATCH_TYPE.to_string(),
             RequestType::Any => RequestType::ANY_TYPE.to_string(),
-        }
+        })
     }
 }

@@ -42,3 +42,8 @@ impl DatabaseConfig {
 		self
 	}
 }
+impl Default for DatabaseConfig {
+	fn default() -> Self {
+	    DatabaseConfig::new()
+	}
+}

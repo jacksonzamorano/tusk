@@ -28,8 +28,8 @@ impl<T: 'static> Server<T> {
         self.routes.add(r);
     }
     pub fn module(&mut self, prefix: &str, rs: Vec<Route<T>>) {
-        let mut applied_prefix = if prefix.ends_with("/") { prefix[0..prefix.len()].to_string() } else { prefix.to_string() };
-        applied_prefix = if !applied_prefix.starts_with("/") { format!("/{}", applied_prefix) } else { applied_prefix };
+        let mut applied_prefix = if prefix.ends_with('/') { prefix[0..prefix.len()].to_string() } else { prefix.to_string() };
+        applied_prefix = if !applied_prefix.starts_with('/') { format!("/{}", applied_prefix) } else { applied_prefix };
         for mut r in rs {
             r.path = format!("{}{}", applied_prefix, r.path);
             self.routes.add(r);
@@ -86,20 +86,16 @@ impl<T: 'static> Server<T> {
         let mut whitespace_count = 0;
 
         // Obtain headers
-        loop {
-            if let Ok(_) = buffer.read_exact(&mut cur_char).await {
-                let cur_char_val = char::from_u32(cur_char[0] as u32).unwrap();
-                headers_content.push(cur_char_val);
-                if cur_char_val == '\u{a}' || cur_char_val == '\u{d}' {
-                    whitespace_count += 1;
-                } else {
-                    whitespace_count = 0;
-                }
-                // When we have a blank line, exit.
-                if whitespace_count == 4 {
-                    break;
-                }
+        while buffer.read_exact(&mut cur_char).await.is_ok() {
+            let cur_char_val = char::from_u32(cur_char[0] as u32).unwrap();
+            headers_content.push(cur_char_val);
+            if cur_char_val == '\u{a}' || cur_char_val == '\u{d}' {
+                whitespace_count += 1;
             } else {
+                whitespace_count = 0;
+            }
+            // When we have a blank line, exit.
+            if whitespace_count == 4 {
                 break;
             }
         }
@@ -109,18 +105,18 @@ impl<T: 'static> Server<T> {
             .map(|a| a.to_string())
             .take_while(|a| !a.is_empty())
             .collect();
-        let head = &req[0].split(" ").collect::<Vec<&str>>();
+        let head = &req[0].split(' ').collect::<Vec<&str>>();
 
         let head_path = head[1].to_string();
-        let path = head_path.split("?").collect::<Vec<&str>>();
+        let path = head_path.split('?').collect::<Vec<&str>>();
         let wo_query_sect = path[0].to_string();
 
         let mut created_request = Request {
-            path: if wo_query_sect.ends_with("/") { wo_query_sect[0..wo_query_sect.len() - 1].to_string() } else { wo_query_sect.to_string() },
+            path: if wo_query_sect.ends_with('/') { wo_query_sect[0..wo_query_sect.len() - 1].to_string() } else { wo_query_sect.to_string() },
             request_type: RequestType::type_for_method(head[0]),
             query: if let Some(q_d) = path.get(1) {
-                q_d.split("&").into_iter().map(|x| {
-                    let q = x.split("=").collect::<Vec<&str>>();
+                q_d.split('&').map(|x| {
+                    let q = x.split('=').collect::<Vec<&str>>();
                     (q[0].to_string(), q[1].to_string())
                 }).collect()
             } else {
@@ -131,7 +127,7 @@ impl<T: 'static> Server<T> {
                 .iter()
                 .map(|a| {
                     let d: Vec<&str> = a.split(": ").collect();
-                    return (d[0].to_string(), d[1].to_string());
+                    (d[0].to_string(), d[1].to_string())
                 })
                 .collect(),
             body: BodyContents::None,
@@ -149,13 +145,13 @@ impl<T: 'static> Server<T> {
                 }
             }
             if let Some(content_type) = created_request.headers.get("Content-Type") {
-                let no_charset = content_type.split(" ").collect::<Vec<&str>>()[0].replace(";", "");
+                let no_charset = content_type.split(' ').collect::<Vec<&str>>()[0].replace(';', "");
                 created_request.body = BodyContents::type_from_mime(&no_charset, content);
             } else {
-                created_request.body = BodyContents::type_from_mime(&String::new(), content);
+                created_request.body = BodyContents::type_from_mime("", content);
             }
         }
-        return created_request;
+        created_request
     }
 
     async fn default_error(_: Request, _: Object, _: T) -> Result<Response, RouteError> {
@@ -174,10 +170,10 @@ impl<T> Route<T> {
         Route {
             path: {
                 let mut s_path = path;
-                if !s_path.starts_with("/") {
+                if !s_path.starts_with('/') {
                     s_path = format!("/{}", s_path)
                 }
-                if s_path.ends_with("/") {
+                if s_path.ends_with('/') {
                     s_path = s_path[0..s_path.len() - 1].to_string();
                 }
                 s_path
@@ -199,7 +195,7 @@ impl ToBytes for String {
 }
 impl ToBytes for &str {
     fn send(self) -> Vec<u8> {
-        self.bytes().into_iter().collect()
+        self.bytes().collect()
     }
 }
 

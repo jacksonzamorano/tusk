@@ -31,7 +31,7 @@ impl Database {
     }
 
     pub async fn get_connection(&self) -> Option<Object> {
-        Some(self.pool.get().await.ok()?)
+        self.pool.get().await.ok()
     }
 }
 

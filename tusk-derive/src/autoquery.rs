@@ -1,6 +1,6 @@
 use proc_macro2::Ident;
 use quote::format_ident;
-use std::collections::HashMap;
+use std::{collections::HashMap, matches};
 use syn::Fields;
 
 pub fn create_insert_fn(
@@ -54,19 +54,21 @@ pub struct AutoQueryParser {
 
 impl AutoQueryParser {
     pub fn parse(args: String, default_table: String) -> AutoQueryParser {
-        let mut params = TableParams::default();
-        params.table_name = default_table;
+        let mut params = TableParams {
+            table_name: default_table,
+            ..Default::default()
+        };
         let mut queries = Vec::new();
 
         let lines = args
-            .split("\n")
+            .split('\n')
             .filter(|x| x.len() > 1)
             .map(|x| x[1..x.len() - 1].trim());
         for l in lines {
             if l.starts_with('\'') {
                 // We have an option
                 params.add_param(l[1..l.len()].to_string())
-            } else if l != "" {
+            } else if !l.is_empty() {
                 // We have a query
                 queries.push(QueryDefinition::parse(l.trim().to_string()));
             }
@@ -78,12 +80,12 @@ impl AutoQueryParser {
     pub fn into_token_stream(
         self,
         struct_name: &Ident,
-        fields: &Vec<String>,
+        fields: &[String],
     ) -> (proc_macro2::TokenStream, TableParams) {
         let qs = self
             .queries
             .iter()
-            .map(|x| x.generate(struct_name, &self.params, &fields))
+            .map(|x| x.generate(struct_name, &self.params, fields))
             .collect::<Vec<_>>();
         (
             quote! {
@@ -102,10 +104,10 @@ pub struct TableParams {
 
 impl TableParams {
     pub fn add_param(&mut self, data: String) {
-        let split = data.split(":").map(|x| x.trim()).collect::<Vec<_>>();
+        let split = data.split(':').map(|x| x.trim()).collect::<Vec<_>>();
         match split[0] {
             "ignore_keys" => {
-                self.ignore_keys = split[1].split(",").map(|x| x.to_string()).collect()
+                self.ignore_keys = split[1].split(',').map(|x| x.to_string()).collect()
             }
             _ => panic!("Unknown parameter {}", split[0]),
         }
@@ -159,7 +161,7 @@ impl QueryDefinition {
                     if l == '(' {
                         parse_stage = QueryDefinitionParseStage::Params;
                         continue;
-                    } else if (query_contents.len() > 0 || l != ' ') && l != '\'' {
+                    } else if (!query_contents.is_empty() || l != ' ') && l != '\'' {
                         query_contents.push(l);
                     }
                 }
@@ -187,9 +189,9 @@ impl QueryDefinition {
         let fn_args = self
             .query_args
             .iter()
-            .filter(|x| x.len() > 0)
+            .filter(|x| !x.is_empty())
             .map(|x| {
-                let spl = x.split(":").collect::<Vec<_>>();
+                let spl = x.split(':').collect::<Vec<_>>();
                 let name = format_ident!("{}", spl[0]);
                 let typ = format_ident!("{}", spl[1]);
                 quote! {
@@ -200,20 +202,20 @@ impl QueryDefinition {
         let fn_args_name = self
             .query_args
             .iter()
-            .filter(|x| x.len() > 0)
-            .map(|x| format_ident!("{}", x.split(":").collect::<Vec<_>>()[0]))
+            .filter(|x| !x.is_empty())
+            .map(|x| format_ident!("{}", x.split(':').collect::<Vec<_>>()[0]))
             .collect::<Vec<_>>();
 
         let preface =
             self.query_type
-                .generate_preface(&params, &self.options, struct_fields, struct_ident);
+                .generate_preface(params, &self.options, struct_fields, struct_ident);
         let translated_params = self
             .query_args
             .iter()
             .enumerate()
             .map(|(ix, x)| {
                 (
-                    x.split(":").collect::<Vec<_>>()[0],
+                    x.split(':').collect::<Vec<_>>()[0],
                     ix + preface.arg_count + 1,
                 )
             })
@@ -241,7 +243,6 @@ impl QueryDefinition {
                     .await #post_query
             }
         }
-        .into()
     }
 }
 #[derive(Debug)]
@@ -270,10 +271,7 @@ impl QueryType {
     }
 
     fn require_self(&self) -> bool {
-        match self {
-            Self::Update => true,
-            _ => false,
-        }
+        matches!(self, Self::Update)
     }
 
     fn generate_preface(
@@ -298,7 +296,7 @@ impl QueryType {
                     .iter()
                     .map(|x| format_ident!("{}", x))
                     .collect::<Vec<_>>();
-                return QueryPreface {
+                QueryPreface {
                     query: format!(
                         "UPDATE {} SET {}",
                         table_params.table_name,
@@ -317,7 +315,7 @@ impl QueryType {
                     args: quote! {
                         #(&self.#fields),*,
                     },
-                };
+                }
             }
             QueryType::Delete => QueryPreface {
                 query: format!("DELETE FROM {}", table_params.table_name),

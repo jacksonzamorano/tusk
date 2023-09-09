@@ -56,7 +56,7 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
 pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let params = args
         .to_string()
-        .split(" ")
+        .split(' ')
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
     let route_type = params[0].clone();
@@ -78,10 +78,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
         .unwrap()
         .to_token_stream()
         .to_string();
-    let type_vals = inputs_last.split(":").collect::<Vec<&str>>();
+    let type_vals = inputs_last.split(':').collect::<Vec<&str>>();
     let mod_type = format_ident!(
         "{}",
-        type_vals[1].to_string().replace("&", "").replace(" ", "")
+        type_vals[1].to_string().replace(['&', ' '], "")
     );
 
     quote! {
@@ -113,16 +113,13 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
             .to_token_stream()
             .to_string()
             .replace("Result", "")
-            .replace("<", "")
-            .replace(",", "")
-            .replace("-", "")
+            .replace(['<', ',', '-'], "")
             .replace("RouteError", "")
-            .replace(">", "")
+            .replace('>', "")
             .replace("Request", "")
             .replace("PostgresConn", "")
             .replace("tusk::", "")
-            .replace("(", "")
-            .replace(")", "")
+            .replace(['(', ')'], "")
             .trim()
             .to_string()
     );
@@ -134,7 +131,7 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
                 "{}",
                 x.to_token_stream()
                     .to_string()
-                    .split(":")
+                    .split(':')
                     .collect::<Vec<&str>>()[0]
                     .trim()
                     .to_string()
@@ -158,25 +155,25 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ToJson)]
 pub fn derive_to_json(item: TokenStream) -> TokenStream {
     let struct_string = item.to_string();
-    let mut struct_head = struct_string.split("{").collect::<Vec<&str>>()[0]
-        .split(" ")
+    let mut struct_head = struct_string.split('{').collect::<Vec<&str>>()[0]
+        .split(' ')
         .collect::<Vec<&str>>();
     if struct_head.last().unwrap().is_empty() {
         struct_head.remove(struct_head.len() - 1);
     }
-    let struct_name = struct_head.last().unwrap().replace("\n", "");
+    let struct_name = struct_head.last().unwrap().replace('\n', "");
 
-    let struct_fields_string = struct_string.split("{").collect::<Vec<&str>>()[1].replace("}", "");
+    let struct_fields_string = struct_string.split('{').collect::<Vec<&str>>()[1].replace('}', "");
     let struct_fields = struct_fields_string
-        .split(",")
+        .split(',')
         .filter(|x| !x.trim().is_empty())
         .collect::<Vec<&str>>()
         .iter()
         .map(|x| {
-            let vals = x.split(":").collect::<Vec<&str>>();
-            let field_details = vals[0].trim().split(" ").last().unwrap().to_string();
+            let vals = x.split(':').collect::<Vec<&str>>();
+            let field_details = vals[0].trim().split(' ').last().unwrap().to_string();
             let struct_type = vals[1].trim().to_string();
-            return (field_details, struct_type);
+            (field_details, struct_type)
         })
         .collect::<Vec<(String, String)>>();
 
