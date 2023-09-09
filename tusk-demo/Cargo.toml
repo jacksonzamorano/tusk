@@ -1,0 +1,12 @@
+[package]
+name = "tusk-demo"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tusk-derive = { path = "../tusk-derive" }
+tusk = { path = "../tusk" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+rand = { version = "0.8.5" }
