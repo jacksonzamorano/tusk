@@ -258,14 +258,14 @@ impl JsonArray {
     ///
     /// * `index` — The index to retrieve from.
     pub fn get<T: JsonRetrieve>(&self, index: usize) -> Option<T> {
-        return T::parse(self.values.get(index)?);
+        T::parse(self.values.get(index)?)
     }
 
     /// Converts all elements of this JSONArray
     /// to a type that implements JsonRetrieve.
     /// Drops any types that are not parsed properly.
     pub fn map<T: JsonRetrieve>(&self) -> Vec<T> {
-        self.values.iter().map(|x| T::parse(x)).filter_map(|x| x).collect()
+        self.values.iter().filter_map(|x| T::parse(x)).collect()
     }
 }
 
@@ -428,27 +428,27 @@ pub trait JsonRetrieve {
 
 impl JsonRetrieve for String {
     fn parse(value: &JsonChild) -> Option<Self> {
-        return Some(value.contents.clone());
+        Some(value.contents.clone())
     }
 }
 impl JsonRetrieve for i32 {
     fn parse(value: &JsonChild) -> Option<Self> {
-        return value.contents.parse().ok();
+        value.contents.parse().ok()
     }
 }
 impl JsonRetrieve for i64 {
     fn parse(value: &JsonChild) -> Option<Self> {
-        return value.contents.parse().ok();
+        value.contents.parse().ok()
     }
 }
 impl JsonRetrieve for f32 {
     fn parse(value: &JsonChild) -> Option<Self> {
-        return value.contents.parse().ok();
+        value.contents.parse().ok()
     }
 }
 impl JsonRetrieve for f64 {
     fn parse(value: &JsonChild) -> Option<Self> {
-        return value.contents.parse().ok();
+        value.contents.parse().ok()
     }
 }
 impl JsonRetrieve for JsonObject {
