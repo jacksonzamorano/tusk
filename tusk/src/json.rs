@@ -2,12 +2,24 @@ use std::collections::HashMap;
 
 use super::RouteError;
 
+/// A JSON structure that is formatted
+/// like the following:
+///
+/// {
+///     "key": "value"
+/// }
 #[derive(Debug)]
 pub struct JsonObject {
     keys: HashMap<String, JsonChild>,
 }
 
 impl JsonObject {
+    /// Builds a JSONObject from a string
+    /// containing keys and values.
+    ///
+    /// # Arguments
+    ///
+    /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonObject {
         let json = json[0..json.chars().count() - 1].to_string();
         let mut keys: HashMap<String, JsonChild> = HashMap::new();
@@ -110,94 +122,42 @@ impl JsonObject {
         JsonObject { keys }
     }
 
-    pub fn string(&self, key: &str) -> Option<String> {
+    /// Return a key of the JSON object as a type which
+    /// implements JsonRetrieve.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — The key to retrieve from.
+    pub fn get<T: JsonRetrieve>(&self, key: &str) -> Option<T> {
         let child = self.keys.get(key)?;
-        Some(child.contents.clone())
+        T::parse(child)
     }
 
-    pub fn validate_string(&self, key: &str, err: &str) -> Result<String, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        Ok(child.contents.clone())
-    }
-
-    pub fn i32(&self, key: &str) -> Option<i32> {
-        let child = self.keys.get(key)?;
-        child.contents.parse().ok()
-    }
-
-    pub fn validate_i32(&self, key: &str, err: &str) -> Result<i32, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        child.contents.parse().or(Err(RouteError::bad_request(err)))
-    }
-
-    pub fn i64(&self, key: &str) -> Option<i64> {
-        let child = self.keys.get(key)?;
-        child.contents.parse().ok()
-    }
-
-    pub fn validate_i64(&self, key: &str, err: &str) -> Result<i64, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        child.contents.parse().or(Err(RouteError::bad_request(err)))
-    }
-
-    pub fn f32(&self, key: &str) -> Option<f32> {
-        let child = self.keys.get(key)?;
-        child.contents.parse().ok()
-    }
-
-    pub fn validate_f32(&self, key: &str, err: &str) -> Result<f32, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        child.contents.parse().or(Err(RouteError::bad_request(err)))
-    }
-
-    pub fn f64(&self, key: &str) -> Option<f64> {
-        let child = self.keys.get(key)?;
-        child.contents.parse().ok()
-    }
-
-    pub fn validate_f64(&self, key: &str, err: &str) -> Result<f64, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        child.contents.parse().or(Err(RouteError::bad_request(err)))
-    }
-
-    pub fn object(&self, key: &str) -> Option<JsonObject> {
-        let child = self.keys.get(key)?;
-        if child.content_type != JsonType::Object {
-            return None;
-        }
-        Some(JsonObject::from_string(child.contents.clone()))
-    }
-
-    pub fn validate_object(&self, key: &str, err: &str) -> Result<JsonObject, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        if child.content_type != JsonType::Object {
-            return Err(RouteError::bad_request(err));
-        }
-        Ok(JsonObject::from_string(child.contents.clone()))
-    }
-
-    pub fn array(&self, key: &str) -> Option<JsonArray> {
-        let child = self.keys.get(key)?;
-        if child.content_type != JsonType::Array {
-            return None;
-        }
-        Some(JsonArray::from_string(child.contents.clone()))
-    }
-
-    pub fn validate_array(&self, key: &str, err: &str) -> Result<JsonArray, RouteError> {
-        let child = self.keys.get(key).ok_or(RouteError::bad_request(err))?;
-        if child.content_type != JsonType::Array {
-            return Err(RouteError::bad_request(err));
-        }
-        Ok(JsonArray::from_string(child.contents.clone()))
+    /// A convienience function that calls the `get` method
+    /// and validates that it exists and was parsed correctly
+    /// or returns a `RouteError::bad_request` (400 error) with
+    /// the message provided.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — The key to retrieve from.
+    /// * `err` — The error message to return if key is None.
+    pub fn validate_get<T: JsonRetrieve>(&self, key: &str, err: &str) -> Result<T, RouteError> {
+        self.get(key).ok_or(RouteError::bad_request(err))
     }
 }
-
 #[derive(Debug)]
 pub struct JsonArray {
     values: Vec<JsonChild>,
 }
 impl JsonArray {
+    /// Builds a JSONArray from a string
+    /// containing children that implement
+    /// `JsonRetreive`
+    ///
+    /// # Arguments
+    ///
+    /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonArray {
         let mut values: Vec<JsonChild> = Vec::new();
         let json = json[1..json.chars().count() - 1].to_string();
@@ -291,15 +251,26 @@ impl JsonArray {
         JsonArray { values }
     }
 
-    pub fn get(&self, index: usize) -> &JsonChild {
-        return self.values.get(index).unwrap();
+    /// Gets the object at the index as a type
+    /// that implements JsonRetrieve.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` — The index to retrieve from.
+    pub fn get<T: JsonRetrieve>(&self, index: usize) -> Option<T> {
+        return T::parse(self.values.get(index)?);
     }
 
-    pub fn all(&self) -> &Vec<JsonChild> {
-        &self.values
+    /// Converts all elements of this JSONArray
+    /// to a type that implements JsonRetrieve.
+    /// Drops any types that are not parsed properly.
+    pub fn map<T: JsonRetrieve>(&self) -> Vec<T> {
+        self.values.iter().map(|x| T::parse(x)).filter_map(|x| x).collect()
     }
 }
 
+/// A type used to internally represet JSON.
+/// Only used publicly to implement `JsonRetrieve`.
 #[derive(Debug)]
 pub struct JsonChild {
     content_type: JsonType,
@@ -311,39 +282,6 @@ impl JsonChild {
             content_type: JsonType::String,
             contents: String::new(),
         }
-    }
-
-    pub fn string(&self) -> Option<String> {
-        Some(self.contents.clone())
-    }
-
-    pub fn i32(&self) -> Option<i32> {
-        self.contents.parse().ok()
-    }
-
-    pub fn i64(&self) -> Option<i64> {
-        self.contents.parse().ok()
-    }
-
-    pub fn f32(&self) -> Option<f32> {
-        self.contents.parse().ok()
-    }
-
-    pub fn f64(&self) -> Option<f64> {
-        self.contents.parse().ok()
-    }
-
-    pub fn object(&self) -> Option<JsonObject> {
-        if self.content_type != JsonType::Object {
-            return None;
-        }
-        Some(JsonObject::from_string(self.contents.clone()))
-    }
-    pub fn array(&self) -> Option<JsonArray> {
-        if self.content_type != JsonType::Array {
-            return None;
-        }
-        Some(JsonArray::from_string(self.contents.clone()))
     }
 }
 
@@ -377,7 +315,11 @@ impl JsonType {
     }
 }
 
+/// ToJson is a trait that allows any conforming
+/// structs to convert to a JSON format.
 pub trait ToJson {
+    /// ToJson creates a JSON string from
+    /// anything which implements it
     fn to_json(&self) -> String;
 }
 
@@ -475,5 +417,53 @@ impl<K: AsRef<str>, V: ToJson> ToJson for HashMap<K, V> {
         output = output[0..output.len() - 1].to_string();
         output += "}";
         output
+    }
+}
+
+pub trait JsonRetrieve {
+    fn parse(value: &JsonChild) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+impl JsonRetrieve for String {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        return Some(value.contents.clone());
+    }
+}
+impl JsonRetrieve for i32 {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        return value.contents.parse().ok();
+    }
+}
+impl JsonRetrieve for i64 {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        return value.contents.parse().ok();
+    }
+}
+impl JsonRetrieve for f32 {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        return value.contents.parse().ok();
+    }
+}
+impl JsonRetrieve for f64 {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        return value.contents.parse().ok();
+    }
+}
+impl JsonRetrieve for JsonObject {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        if value.content_type == JsonType::Object {
+            return Some(JsonObject::from_string(value.contents.clone()));
+        }
+        None
+    }
+}
+impl JsonRetrieve for JsonArray {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        if value.content_type == JsonType::Array {
+            return Some(JsonArray::from_string(value.contents.clone()));
+        }
+        None
     }
 }

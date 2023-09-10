@@ -5,12 +5,15 @@ use tokio_postgres::NoTls;
 
 use crate::config::DatabaseConfig;
 
+/// A thin wrapper for the Deadpool Postgres library.
+/// Used by Tusk to allocate connections for each route.
 #[derive(Clone)]
 pub struct Database {
     pool: Pool,
 }
 
 impl Database {
+    /// Create a new database pool.
     pub async fn new(config: DatabaseConfig) -> Option<Database> {
         let mut cfg = deadpool_postgres::Config::new();
         cfg.user = Some(config.username);
@@ -30,6 +33,7 @@ impl Database {
         }
     }
 
+    /// Gets a connection within the pool.
     pub async fn get_connection(&self) -> Option<Object> {
         self.pool.get().await.ok()
     }

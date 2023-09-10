@@ -1,8 +1,8 @@
-use tusk::{Request, RouteError, Route, Response};
-use tusk_derive::ToJson;
+use tusk_rs::{Request, RouteError, Route, Response};
+use tusk_rs_derive::ToJson;
 use models::{RouteData, User};
-use tusk::{config::DatabaseConfig, PostgresConn};
-use tusk_derive::{route, treatment};
+use tusk_rs::{config::DatabaseConfig, PostgresConn};
+use tusk_rs_derive::{route, treatment};
 mod models;
 mod util;
 
@@ -43,7 +43,7 @@ pub async fn treat_user_data(_req: Request, db: PostgresConn) -> Result<RouteDat
 #[tokio::main]
 async fn main() {
     let config = DatabaseConfig::new();
-    let mut server = tusk::Server::new(9000, config, treat_user_data()).await;
+    let mut server = tusk_rs::Server::new(9000, config, treat_user_data()).await;
     server.register(get_users());
     server.register(create_user());
     server.start().await;

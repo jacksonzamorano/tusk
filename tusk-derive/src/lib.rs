@@ -28,7 +28,7 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
     });
 
     let constructor = quote! {
-        pub fn from_postgres(row: &tusk::Row) -> #provided_struct_name {
+        pub fn from_postgres(row: &tusk_rs::Row) -> #provided_struct_name {
             #provided_struct_name {
                 #(#field_create),*
             }
@@ -85,10 +85,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     );
 
     quote! {
-        pub fn #data_name() -> tusk::Route<#mod_type> {
+        pub fn #data_name() -> tusk_rs::Route<#mod_type> {
             Route::new(
                 #route_name.to_string(),
-                tusk::RequestType::#route_type_ident,
+                tusk_rs::RequestType::#route_type_ident,
                 Box::new(move |a,b,c| Box::pin(#int_fn_name(a,b,c)))
             )
         }
@@ -118,7 +118,7 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
             .replace('>', "")
             .replace("Request", "")
             .replace("PostgresConn", "")
-            .replace("tusk::", "")
+            .replace("tusk_rs::", "")
             .replace(['(', ')'], "")
             .trim()
             .to_string()
@@ -142,10 +142,10 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         use core::future::Future;
         use tokio::macros::support::Pin;
-        pub fn #data_name() -> Box<fn(Request, tusk::PostgresConn) -> Pin<Box<dyn Future<Output = Result<(#o, Request, tusk::PostgresConn), RouteError>>>>> {
+        pub fn #data_name() -> Box<fn(Request, tusk_rs::PostgresConn) -> Pin<Box<dyn Future<Output = Result<(#o, Request, tusk_rs::PostgresConn), RouteError>>>>> {
             Box::new(move |a,b| Box::pin(#data_name_int(a,b)))
         }
-        async fn #data_name_int(#inputs) -> Result<(#o, Request, tusk::PostgresConn), RouteError> {
+        async fn #data_name_int(#inputs) -> Result<(#o, Request, tusk_rs::PostgresConn), RouteError> {
             let fn_eval = #data_block;
             return Ok((fn_eval, #(#mapped_inputs_outputs),*));
         }
@@ -180,7 +180,7 @@ pub fn derive_to_json(item: TokenStream) -> TokenStream {
     let quote = "\\\"";
 
     let mut output = String::new();
-    output += "impl tusk::json::ToJson for ";
+    output += "impl tusk_rs::json::ToJson for ";
     output += &struct_name;
     output += " {\n";
     output += "fn to_json(&self) -> String {\n";

@@ -36,7 +36,7 @@ pub fn create_insert_fn(
     );
 
     quote! {
-        pub async fn insert(&self, db: &tusk::PostgresConn) -> #name {
+        pub async fn insert(&self, db: &tusk_rs::PostgresConn) -> #name {
             #name::from_postgres(db.query(#insert_query, &[#(#pg_params),*])
                 .await
                 .unwrap()
@@ -238,7 +238,7 @@ impl QueryDefinition {
         };
 
         quote! {
-            pub async fn #fn_name(#s_param db: &tusk::PostgresConn, #(#fn_args),*) -> #return_type {
+            pub async fn #fn_name(#s_param db: &tusk_rs::PostgresConn, #(#fn_args),*) -> #return_type {
                 db.query(#query, &[#preface_args #(&#fn_args_name),*])
                     .await #post_query
             }

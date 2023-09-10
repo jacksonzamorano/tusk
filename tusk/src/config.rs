@@ -1,3 +1,4 @@
+/// Defines a connection to a Postgres server.
 pub struct DatabaseConfig {
 	pub host: String,
 	pub port: i32,
@@ -7,6 +8,9 @@ pub struct DatabaseConfig {
 	pub ssl: bool
 }
 impl DatabaseConfig {
+	/// Creates a new database connection config.
+	/// It is setup by default to connect to localhost,
+	/// with the username "postgres" and a blank password.
 	pub fn new() -> DatabaseConfig {
 		DatabaseConfig {
 			host: "localhost".to_string(),
@@ -17,26 +21,86 @@ impl DatabaseConfig {
 			ssl: false
 		}
 	}
+
+	/// Define the host. Can be chained.
+	/// 
+	/// # Examples
+	///
+	/// ```
+	/// use tusk_rs::config::DatabaseConfig;
+	///
+	/// DatabaseConfig::new().username("username").password("password")
+	/// ```
 	pub fn host<T: AsRef<str>>(mut self, host: T) -> DatabaseConfig {
 		self.host = host.as_ref().to_string();
 		self
 	}
+
+	/// Define the username. Can be chained.
+	/// 
+	/// # Examples
+	///
+	/// ```
+	/// use tusk_rs::config::DatabaseConfig;
+	///
+	/// DatabaseConfig::new().username("username").password("password")
+	/// ```
 	pub fn username<T: AsRef<str>>(mut self, username: T) -> DatabaseConfig {
 		self.username = username.as_ref().to_string();
 		self
 	}
+
+	/// Define the password. Can be chained.
+	/// 
+	/// # Examples
+	///
+	/// ```
+	/// use tusk_rs::config::DatabaseConfig;
+	///
+	/// DatabaseConfig::new().username("username").password("password")
+	/// ```
 	pub fn password<T: AsRef<str>>(mut self, password: T) -> DatabaseConfig {
 		self.password = password.as_ref().to_string();
 		self
 	}
+
+	/// Define the database name. Can be chained.
+	/// 
+	/// # Examples
+	///
+	/// ```
+	/// use tusk_rs::config::DatabaseConfig;
+	///
+	/// DatabaseConfig::new().username("username").password("password")
+	/// ```
 	pub fn database<T: AsRef<str>>(mut self, database: T) -> DatabaseConfig {
 		self.database = database.as_ref().to_string();
 		self
 	}
+
+	/// Define whether SSL should be used. Can be chained.
+	/// 
+	/// # Examples
+	///
+	/// ```
+	/// use tusk_rs::config::DatabaseConfig;
+	///
+	/// DatabaseConfig::new().username("username").password("password")
+	/// ```
 	pub fn ssl(mut self, ssl: bool) -> DatabaseConfig {
 		self.ssl = ssl;
 		self
 	}
+
+	/// Define the port. Can be chained.
+	/// 
+	/// # Examples
+	///
+	/// ```
+	/// use tusk_rs::config::DatabaseConfig;
+	///
+	/// DatabaseConfig::new().username("username").password("password")
+	/// ```
 	pub fn port(mut self, port: i32) -> DatabaseConfig {
 		self.port = port;
 		self

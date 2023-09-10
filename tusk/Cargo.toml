@@ -1,6 +1,6 @@
 [package]
 name = "tusk-rs"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Postgres-backed Web APIs"
 license = "MIT"

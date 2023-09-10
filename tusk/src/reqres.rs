@@ -1,6 +1,11 @@
 use super::{JsonArray, JsonObject, ToJson};
 use std::{collections::HashMap, fmt::{Display, Formatter}, matches};
 
+/// An incoming request. Information is extracted from 
+/// the HTTP request and placed nicely into the following fields.
+///
+/// Body data can be extracted is several different types by 
+/// accessing `body`. See more details in [`BodyContents`].
 #[derive(Debug)]
 pub struct Request {
     pub request_type: RequestType,
@@ -10,12 +15,20 @@ pub struct Request {
     pub body: BodyContents,
 }
 
+/// An outgoing response. This will be converted to HTTP
+/// values before being sent. It is recommended to use
+/// convenience methods to create this, as it vastly simplifies
+/// sending data.
+///
+/// HTML, JSON, Strings, and Data (`Vec<u8>`) can easily be sent
+/// using the respective methods.
 pub struct Response {
-    data: Vec<u8>,
-    status: ResponseStatusCode,
-    headers: HashMap<String, String>,
+    pub data: Vec<u8>,
+    pub status: ResponseStatusCode,
+    pub headers: HashMap<String, String>,
 }
 impl Response {
+    /// Create a new, empty response.
     pub fn new() -> Response {
         Response {
             data: Vec::new(),
@@ -24,6 +37,8 @@ impl Response {
         }
     }
 
+    /// Create a new response which transmits the data
+    /// passed in as raw bytes.
     pub fn data(data: Vec<u8>) -> Response {
         Response {
             data,
@@ -31,16 +46,28 @@ impl Response {
             headers: HashMap::new(),
         }
     }
+
+    /// Create a new response which transmits a string
+    /// with `Content-Type` as `text/plain`
     pub fn string<S: AsRef<str>>(s: S) -> Response {
         Response::data(s.as_ref().bytes().collect()).header("Content-Type", "text/plain")
     }
+
+    /// Create a new response which transmits any struct
+    /// which implements [`ToJson`].
+    /// Data is sent with `Content-Type` as `application/json; charset=utf-8`
     pub fn json<S: ToJson>(s: &S) -> Response {
         Response::data(s.to_json().into_bytes()).header("Content-Type", "application/json; charset=utf-8")
     }
+
+    /// Create a new response which transmits HTML read
+    /// from a file. Sends `Content-Type` as `text/html`.
     pub fn html(s: Vec<u8>) -> Response {
         Response::data(s).header("Content-Type", "text/html")
     }
 
+    /// Used internally to generate header data
+    /// in properly formatted HTTP.
     pub fn get_header_data(&self) -> Vec<u8> {
         let mut output = String::from("HTTP/1.1 ");
         output += &self.status.http_string();
@@ -58,17 +85,21 @@ impl Response {
         output.into_bytes()
     }
 
+    /// Set the status. Statuses in Tusk are strongly typed,
+    ///  reference [`ResponseStatusCode`].
     pub fn status(mut self, status: ResponseStatusCode) -> Response {
         self.status = status;
         self
     }
 
+    /// Set header values.
     pub fn header<S: AsRef<str>, T: AsRef<str>>(mut self, key: S, value: T) -> Response {
         self.headers.insert(key.as_ref().to_string(), value.as_ref().to_string());
         self
     }
 
-    // Get bytes out
+    /// Convert the body of the request into bytes, consuming
+    /// the Response.
     pub fn bytes(self) -> Vec<u8> {
         self.data
     }
@@ -79,12 +110,25 @@ impl Default for Response {
     }
 }
 
+/// RouteError is a struct that lets Tusk know
+/// that something went wrong in your application.
+/// It automatically can handle simple `String`s as errors,
+/// but a custom `String` can be provided by using the `custom`
+/// method.
+///
+/// If the default implementation is used, the response returns
+/// in this format:
+/// `{
+/// code: HTTP CODE,
+/// message: "your_message"
+/// }`
 pub struct RouteError {
     pub message: String,
     pub status_code: ResponseStatusCode,
     pub override_output: bool,
 }
 impl RouteError {
+    /// Sends a 400 error with a message.
     pub fn bad_request(msg: &str) -> RouteError {
         RouteError {
             message: msg.to_string(),
@@ -92,6 +136,8 @@ impl RouteError {
             override_output: false,
         }
     }
+
+    /// Sends a 403 error with a message.
     pub fn forbidden(msg: &str) -> RouteError {
         RouteError {
             message: msg.to_string(),
@@ -99,6 +145,8 @@ impl RouteError {
             override_output: false,
         }
     }
+
+    /// Sends a 404 error with a message.
     pub fn not_found(msg: &str) -> RouteError {
         RouteError {
             message: msg.to_string(),
@@ -106,6 +154,8 @@ impl RouteError {
             override_output: false,
         }
     }
+
+    /// Sends a 409 error with a message.
     pub fn conflict(msg: &str) -> RouteError {
         RouteError {
             message: msg.to_string(),
@@ -113,6 +163,8 @@ impl RouteError {
             override_output: false,
         }
     }
+
+    /// Sends a 500 error with a message.
     pub fn server_error(msg: &str) -> RouteError {
         RouteError {
             message: msg.to_string(),
@@ -120,6 +172,10 @@ impl RouteError {
             override_output: false,
         }
     }
+
+    /// Return a custom error message. The string provided is 
+    /// directly sent with no formatting.
+    /// A status code is also provided.
     pub fn custom(msg: &str, status_code: ResponseStatusCode) -> RouteError {
         RouteError {
             message: msg.to_string(),
@@ -128,6 +184,7 @@ impl RouteError {
         }
     }
 
+    /// Output the body of the request.
     pub fn output(&self) -> String {
         if self.override_output {
             return self.message.clone();
@@ -143,6 +200,7 @@ impl RouteError {
         o
     }
 
+    /// Outputs the header of the response.
     pub fn header(&self) -> Vec<u8> {
         let mut output = String::from("HTTP/1.1 ");
         output += &self.status_code.http_string();
@@ -154,6 +212,8 @@ impl RouteError {
     }
 }
 
+/// Struct which strongly types HTTP status code names
+/// to their corresponding codes.
 #[derive(Clone)]
 pub enum ResponseStatusCode {
     Ok,

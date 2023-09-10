@@ -6,13 +6,13 @@
 
 #[macro_export] macro_rules! json_string {
     ($body:ident, $field:literal) => {
-        $body.validate_string($field, &format!("{} is a required field.", $field))?
+        $body.validate_get::<String>($field, &format!("{} is a required field.", $field))?
     };
 }
 
 #[macro_export] macro_rules! json_i32 {
     ($body:ident, $field:literal) => {
-        $body.validate_i32($field, &format!("{} is a required field.", $field))?
+        $body.validate<i32>($field, &format!("{} is a required field.", $field))?
     };
 }
 

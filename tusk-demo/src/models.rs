@@ -1,4 +1,4 @@
-use tusk_derive::{ToJson, autoquery};
+use tusk_rs_derive::{ToJson, autoquery};
 
 pub struct RouteData {
 

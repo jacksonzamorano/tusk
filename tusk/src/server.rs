@@ -2,12 +2,16 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use tokio::io::{AsyncWriteExt, AsyncReadExt, BufReader};
-
 use tokio::net::{TcpListener, TcpStream};
 use deadpool_postgres::Object;
 use crate::{config::DatabaseConfig, database::Database};
 use super::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
 
+/// The core of Tusk, `Server` is a async/await ready
+/// web server.
+///
+/// Server accepts a generic type `T`. This type is injected
+/// into all routes as the final argument.
 pub struct Server<T> {
     routes: RouteStorage<T>,
     listener: TcpListener,
@@ -15,6 +19,10 @@ pub struct Server<T> {
     treatment: AsyncTreatmentHandler<T>
 }
 impl<T: 'static> Server<T> {
+    /// Create a new server.
+    /// Specify a port, [`DatabaseConfig`], and an async
+    /// function with arguments [`Request`] and a PostgresConn
+    /// (alias for [`Object`]) and returns `T`.
     pub async fn new(port: i32, database: DatabaseConfig, treatment: AsyncTreatmentHandler<T>) -> Server<T> {
         Server {
             routes: RouteStorage::new(),
@@ -24,9 +32,13 @@ impl<T: 'static> Server<T> {
         }
     }
 
+    /// Register a [`Route`]. Routes should NOT be registered
+    /// after calling `Server::start`, as all routes are sorted
+    /// for peformance when `start` is called.
     pub fn register(&mut self, r: Route<T>) {
         self.routes.add(r);
     }
+    /// Register many `Route`s at once.
     pub fn module(&mut self, prefix: &str, rs: Vec<Route<T>>) {
         let mut applied_prefix = if prefix.ends_with('/') { prefix[0..prefix.len()].to_string() } else { prefix.to_string() };
         applied_prefix = if !applied_prefix.starts_with('/') { format!("/{}", applied_prefix) } else { applied_prefix };
@@ -35,6 +47,9 @@ impl<T: 'static> Server<T> {
             self.routes.add(r);
         }
     }
+
+    /// Prepares Tusk for serving applications
+    /// and then begins listening.
     pub async fn start(&mut self) {
         self.routes.prep();
         let default: AsyncRouteHandler<T> = Box::new(move |a,b,c| Box::pin(Server::default_error(a,b,c)));
@@ -159,13 +174,31 @@ impl<T: 'static> Server<T> {
     }
 }
 
-
+/// A wrapper for a route.
+/// 
+/// This struct is created by the `#[route(METHOD path)]` macro,
+/// when a function is decorated with that macro, the function is
+/// rewritten such that it returns the Route.
+///
+/// The route function should be an async function
+/// with arguments for:
+/// - [`Request`]
+/// - [`Object`] (aliased to `tusk_rs::PostgresConn` for readability)
+/// - `T`
+/// 
+/// It should return a `Result<Response, RouteError>`.
+/// 
+/// Finally, it must be annotated with the `#[route(METHOD path)]`
+/// macro, as it rewrites your function to be passable
+/// to a route.
 pub struct Route<T> {
     pub path: String,
     pub request_type: RequestType,
     pub handler: AsyncRouteHandler<T>
 }
 impl<T> Route<T> {
+    /// A route can be manually created, but it is not
+    /// recommended.
     pub fn new(path: String, request_type: RequestType, handler: AsyncRouteHandler<T>) -> Route<T> {
         Route {
             path: {
@@ -184,28 +217,13 @@ impl<T> Route<T> {
     }
 }
 
-pub trait ToBytes {
-    fn send(self) -> Vec<u8>;
-}
-
-impl ToBytes for String {
-    fn send(self) -> Vec<u8> {
-        self.into_bytes()
-    }
-}
-impl ToBytes for &str {
-    fn send(self) -> Vec<u8> {
-        self.bytes().collect()
-    }
-}
-
 #[derive(Debug)]
 pub struct IncomingRequest {
     pub request: Request,
     pub stream: TcpStream,
 }
 
-pub struct RouteStorage<T> {
+struct RouteStorage<T> {
     routes_get: Vec<Route<T>>,
     routes_post: Vec<Route<T>>,
     routes_put: Vec<Route<T>>,
