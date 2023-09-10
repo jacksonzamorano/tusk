@@ -823,7 +823,7 @@ dependencies = [
 
 [[package]]
 name = "tusk-rs"
-version = "0.1.3"
+version = "0.0.0"
 dependencies = [
  "deadpool-postgres",
  "openssl",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "tusk-rs-derive"
-version = "0.1.3"
+version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
