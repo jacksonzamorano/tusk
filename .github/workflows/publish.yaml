@@ -25,8 +25,8 @@ jobs:
           cp LICENSE.txt tusk-derive/LICENSE.txt
       - name: Configure version
         run: |
-          sed -i 's/0.0.0/${{github.ref}}/g' tusk/Cargo.toml
-          sed -i 's/0.0.0/${{github.ref}}/g' tusk-derive/Cargo.toml
+          sed -i 's/0.0.0/${{github.ref_name}}/g' tusk/Cargo.toml
+          sed -i 's/0.0.0/${{github.ref_name}}/g' tusk-derive/Cargo.toml
       - name: Publish Tusk
         run: cd tusk && cargo publish --allow-dirty
       - name: Publish Tusk-Derive
