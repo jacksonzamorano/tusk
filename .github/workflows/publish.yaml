@@ -27,10 +27,7 @@ jobs:
           cp LICENSE.txt tusk-derive/LICENSE.txt
       - name: Configure version
         run: |
-          echo "${{github.ref_name}}"
-          sed 's/0.0.0/${{github.ref_name}}/g' tusk/Cargo.toml
-          sed 's/0.0.0/${{github.ref_name}}/g' tusk-derive/Cargo.toml
-          sed 's|path = "../tusk-derive"|version = "${{github.ref_name}}"|g' tusk/Cargo.toml
+          echo "Configuring to release with version ${{github.ref_name}}"
           sed -i 's/0.0.0/${{github.ref_name}}/g' tusk/Cargo.toml
           sed -i 's/0.0.0/${{github.ref_name}}/g' tusk-derive/Cargo.toml
           sed -i 's|path = "../tusk-derive"|version = "${{github.ref_name}}"|g' tusk/Cargo.toml
