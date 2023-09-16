@@ -27,7 +27,8 @@ jobs:
         run: |
           sed -i 's/0.0.0/${{github.ref_name}}/g' tusk/Cargo.toml
           sed -i 's/0.0.0/${{github.ref_name}}/g' tusk-derive/Cargo.toml
-      - name: Publish Tusk
-        run: cd tusk && cargo publish --allow-dirty
+          sed -i "" 's|path = "../tusk-derive"|version = "${{github.ref_name}}"|g' tusk/Cargo.toml
       - name: Publish Tusk-Derive
         run: cd tusk-derive && cargo publish --allow-dirty
+      - name: Publish Tusk
+        run: cd tusk && cargo publish --allow-dirty

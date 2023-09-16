@@ -11,3 +11,4 @@ pub use reqres::{BodyContents, Request, RequestType, Response, ResponseStatusCod
 pub use server::{Route, Server, IncomingRequest};
 use deadpool_postgres::Object;
 pub use tokio_postgres::{Row, types::ToSql, error::SqlState};
+pub use tusk_rs_derive::{ToJson, autoquery, route, treatment};

@@ -11,6 +11,7 @@ repository = "https://github.com/jacksonzamorano/tusk"
 [dependencies]
 tokio = { version = "1", features = ["net", "io-util", "rt-multi-thread", "macros"] }
 tokio-postgres = "0.7.6"
+tusk-rs-derive = { path = "../tusk-derive" }
 deadpool-postgres = { version = "0.10.2" }
 postgres-openssl = "0.5.0"
 openssl = "0.10.55"
