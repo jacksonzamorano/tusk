@@ -257,6 +257,7 @@ enum QueryDefinitionParseStage {
 #[derive(Debug)]
 pub enum QueryType {
     Select,
+    SelectOne,
     Update,
     Delete,
 }
@@ -264,6 +265,7 @@ impl QueryType {
     fn from_string(data: &str) -> QueryType {
         match data {
             "select" => QueryType::Select,
+            "select_one" => QueryType::SelectOne,
             "update" => QueryType::Update,
             "delete" => QueryType::Delete,
             _ => panic!("Unknown query type '{}'", data),
@@ -287,6 +289,15 @@ impl QueryType {
                 return_type: quote! {Vec<#type_ident>},
                 post_query: quote! {
                     .unwrap().iter().map(|x| #type_ident::from_postgres(x)).collect()
+                },
+                arg_count: 0,
+                args: quote! {},
+            },
+            QueryType::SelectOne => QueryPreface {
+                query: format!("SELECT * FROM {}", table_params.table_name),
+                return_type: quote! {Option<#type_ident>},
+                post_query: quote! {
+                    .unwrap().iter().map(|x| #type_ident::from_postgres(x)).next()
                 },
                 arg_count: 0,
                 args: quote! {},
