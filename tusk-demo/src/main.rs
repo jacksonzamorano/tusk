@@ -20,7 +20,7 @@ pub async fn get_users(_req: Request, db: PostgresConn, _data: RouteData) -> Res
     ))
 }
 
-#[route(Post / test_interceptor)]
+#[route(Post / : test_interceptor)]
 pub async fn create_user(req: Request, db: PostgresConn, data: RouteData) -> Result<Response, RouteError> {
     let json = req.body.as_json_object();
     let user_name = json_string!(json, "name");

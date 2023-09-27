@@ -61,7 +61,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     let route_type = params[0].clone();
     let route_type_ident = format_ident!("{}", route_type);
-    let route_name = params[1].clone();
+
+    let idx = params.iter().position(|x| x.trim() == ":");
+
+    let route_name = params[1..if let Some(ix) = idx { ix } else { params.len() }].join("");
 
     let data = parse_macro_input!(input as ItemFn);
     let data_name = &data.sig.ident;
@@ -81,7 +84,7 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let type_vals = inputs_last.split(':').collect::<Vec<&str>>();
     let mod_type = format_ident!("{}", type_vals[1].to_string().replace(['&', ' '], ""));
 
-    let interceptor = if params.len() > 2 {
+    let interceptor = if idx.is_some() {
         let inputs_formatted = data_args
             .iter()
             .map(|x| {
@@ -91,7 +94,7 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
                 }
             })
             .collect::<Vec<_>>();
-        let route_fn = format_ident!("{}", params[2]);
+        let route_fn = format_ident!("{}", params[idx.unwrap() + 1]);
         quote! {
             #route_fn(#(#inputs_formatted),*).await?;
         }
