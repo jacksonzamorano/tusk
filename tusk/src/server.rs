@@ -16,7 +16,8 @@ pub struct Server<T> {
     routes: RouteStorage<T>,
     listener: TcpListener,
     database: Database,
-    treatment: AsyncTreatmentHandler<T>
+    treatment: AsyncTreatmentHandler<T>,
+    postfix: Option<fn(Response) -> Response>
 }
 impl<T: 'static> Server<T> {
     /// Create a new server.
@@ -28,7 +29,8 @@ impl<T: 'static> Server<T> {
             routes: RouteStorage::new(),
             listener: TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap(),
             database: Database::new(database).await.unwrap(),
-            treatment
+            treatment,
+            postfix: None
         }
     }
 
@@ -46,6 +48,12 @@ impl<T: 'static> Server<T> {
             r.path = format!("{}{}", applied_prefix, r.path);
             self.routes.add(r);
         }
+    }
+
+    /// Add function that can modify all outgoing requests.
+    /// Useful for setting headers.
+    pub fn set_postfix(&mut self, f: fn(Response) -> Response) {
+        self.postfix = Some(f);
     }
 
     /// Prepares Tusk for serving applications
@@ -73,7 +81,8 @@ impl<T: 'static> Server<T> {
                 let mut bytes = Vec::new();
                 match (self.treatment)(req.request, db_inst).await {
                     Ok((treat, req, obj)) => match matched_path(req, obj, treat).await {
-                        Ok(body) => {
+                        Ok(mut body) => {
+                            if self.postfix.is_some() { body = self.postfix.unwrap()(body) }
                             bytes.append(&mut body.get_header_data());
                             bytes.append(&mut body.bytes())
                         },
