@@ -17,7 +17,9 @@ pub struct Server<T> {
     listener: TcpListener,
     database: Database,
     treatment: AsyncTreatmentHandler<T>,
-    postfix: Option<fn(Response) -> Response>
+    postfix: Option<fn(Response) -> Response>,
+    cors_origin: String,
+    cors_headers: String
 }
 impl<T: 'static> Server<T> {
     /// Create a new server.
@@ -30,7 +32,9 @@ impl<T: 'static> Server<T> {
             listener: TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap(),
             database: Database::new(database).await.unwrap(),
             treatment,
-            postfix: None
+            postfix: None,
+            cors_origin: "*".to_string(),
+            cors_headers: "Origin, X-Requested-With, Content-Type, Accept, Authorization".to_string()
         }
     }
 
@@ -56,6 +60,12 @@ impl<T: 'static> Server<T> {
         self.postfix = Some(f);
     }
 
+    /// Set CORS data
+    pub fn set_cors(&mut self, origin: &str, headers: &str) {
+        self.cors_origin = origin.to_string();
+        self.cors_headers = headers.to_string();
+    }
+
     /// Prepares Tusk for serving applications
     /// and then begins listening.
     pub async fn start(&mut self) {
@@ -64,7 +74,15 @@ impl<T: 'static> Server<T> {
         loop {
             if let Ok(conn) = self.listener.accept().await {
                 let (mut req_stream, _) = conn;
-                let req_parsed = self.create_request_object(&mut req_stream).await;                
+                let req_parsed = self.create_request_object(&mut req_stream).await;
+                if req_parsed.request_type == RequestType::Options {
+                    let mut bytes = Vec::new();
+                    let body = self.handle_options();
+                    bytes.append(&mut body.get_header_data());
+                    bytes.append(&mut body.bytes());
+                    _ = req_stream.write(&bytes).await;
+                    continue;
+                }               
                 let mut matched_path: &AsyncRouteHandler<T> = &default;
                 if let Some(handler) = self
                     .routes
@@ -80,20 +98,17 @@ impl<T: 'static> Server<T> {
                 let db_inst = self.database.get_connection().await.unwrap();
                 let mut bytes = Vec::new();
                 match (self.treatment)(req.request, db_inst).await {
-                    Ok((treat, req, obj)) => match matched_path(req, obj, treat).await {
-                        Ok(mut body) => {
-                            if self.postfix.is_some() { body = self.postfix.unwrap()(body) }
-                            bytes.append(&mut body.get_header_data());
-                            bytes.append(&mut body.bytes())
-                        },
-                        Err(error) => {
-                            bytes.append(&mut error.header());
-                            bytes.append(&mut error.output().into_bytes())
-                        }
-                    },
+                    Ok((treat, req, obj)) => {
+                        let mut body = matched_path(req, obj, treat).await.unwrap_or_else(|x| x.to_response());
+                        if self.postfix.is_some() { body = self.postfix.unwrap()(body) }
+                        body.apply_cors(&self.cors_origin, &self.cors_headers);
+                        bytes.append(&mut body.get_header_data());
+                        bytes.append(&mut body.bytes())
+                    }
                     Err(error) => {
-                        bytes.append(&mut error.header());
-                        bytes.append(&mut error.output().into_bytes())
+                        let err_req = error.to_response();
+                        bytes.append(&mut err_req.get_header_data());
+                        bytes.append(&mut err_req.bytes());
                     }
                 }
                 // Write stream
@@ -181,6 +196,12 @@ impl<T: 'static> Server<T> {
     async fn default_error(_: Request, _: Object, _: T) -> Result<Response, RouteError> {
         Ok(Response::string("404 not found").status(ResponseStatusCode::NotFound))
     }
+
+    pub fn handle_options(&self) -> Response {
+        let mut r = Response::data(Vec::new());
+        r.apply_cors(&self.cors_origin, &self.cors_headers);
+        r
+    }
 }
 
 /// A wrapper for a route.
@@ -264,7 +285,7 @@ impl<T> RouteStorage<T> {
             RequestType::Put => &self.routes_put,
             RequestType::Patch => &self.routes_patch,
             RequestType::Delete => &self.routes_delete,
-            RequestType::Any => &self.routes_any,
+            _ => &self.routes_any,
         };
         if let Ok(handler_ix) = handler_cat.binary_search_by(|a| a.path.cmp(path)) {
             Some(&handler_cat[handler_ix])
@@ -285,7 +306,7 @@ impl<T> RouteStorage<T> {
             RequestType::Put => &mut self.routes_put,
             RequestType::Patch => &mut self.routes_patch,
             RequestType::Delete => &mut self.routes_delete,
-            RequestType::Any => &mut self.routes_any,
+            _ => &mut self.routes_any,
         };
         handler_cat.push(route);
     }

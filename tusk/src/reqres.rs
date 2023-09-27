@@ -1,3 +1,4 @@
+use chrono::{Utc, Datelike, Timelike};
 use super::{JsonArray, JsonObject, ToJson};
 use std::{collections::HashMap, fmt::{Display, Formatter}, matches};
 
@@ -28,6 +29,30 @@ pub struct Response {
     pub headers: HashMap<String, String>,
 }
 impl Response {
+    const WEEKDAY_MAP: [&str;7] = [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun"
+    ];
+    const MONTH_MAP: [&str;12] = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec"
+    ];
+
     /// Create a new, empty response.
     pub fn new() -> Response {
         Response {
@@ -40,11 +65,24 @@ impl Response {
     /// Create a new response which transmits the data
     /// passed in as raw bytes.
     pub fn data(data: Vec<u8>) -> Response {
+        let cur_time = Utc::now();
+        let len = data.len();
         Response {
             data,
             status: ResponseStatusCode::Ok,
             headers: HashMap::new(),
         }
+        .header("Content-Type", "text/html").header("Content-Length", len.to_string())
+        .header("Date", format!("{}, {} {} {} {:0>2}:{:0>2}:{:0>2} GMT",
+            Self::WEEKDAY_MAP[cur_time.weekday().num_days_from_monday() as usize],
+            cur_time.day(),
+            Self::MONTH_MAP[(cur_time.month() - 1) as usize],
+            cur_time.year(),
+            cur_time.hour(),
+            cur_time.minute(),
+            cur_time.second()
+        ))
+        .header("Connection", "close")
     }
 
     /// Create a new response which transmits a string
@@ -63,7 +101,7 @@ impl Response {
     /// Create a new response which transmits HTML read
     /// from a file. Sends `Content-Type` as `text/html`.
     pub fn html(s: Vec<u8>) -> Response {
-        Response::data(s).header("Content-Type", "text/html")
+        Response::data(s)
     }
 
     /// Used internally to generate header data
@@ -96,6 +134,12 @@ impl Response {
     pub fn header<S: AsRef<str>, T: AsRef<str>>(mut self, key: S, value: T) -> Response {
         self.headers.insert(key.as_ref().to_string(), value.as_ref().to_string());
         self
+    }
+
+    /// Apply CORS values.
+    pub fn apply_cors(&mut self, origin: &String, headers: &String) {
+        self.headers.insert("Access-Control-Allow-Origin".to_string(), origin.to_string());
+        self.headers.insert("Access-Control-Allow-Headers".to_string(), headers.to_string());
     }
 
     /// Convert the body of the request into bytes, consuming
@@ -180,15 +224,11 @@ impl RouteError {
         RouteError {
             message: msg.to_string(),
             status_code,
-            override_output: true,
+            override_output: false,
         }
     }
 
-    /// Output the body of the request.
-    pub fn output(&self) -> String {
-        if self.override_output {
-            return self.message.clone();
-        }
+    pub fn to_response(self) -> Response {
         let mut o = String::new();
         o += "{\n";
         o += "\t\"code\":\"";
@@ -197,18 +237,9 @@ impl RouteError {
         o += "\t\"message\":\"";
         o += &self.message;
         o += "\"\n}";
-        o
-    }
-
-    /// Outputs the header of the response.
-    pub fn header(&self) -> Vec<u8> {
-        let mut output = String::from("HTTP/1.1 ");
-        output += &self.status_code.http_string();
-        if !self.override_output {
-            output += "\r\nContent-Type: application/json; charset=utf-8";
-        }
-        output += "\r\n\r\n";
-        output.into_bytes()
+        Response::data(o.as_bytes().to_vec())
+            .status(self.status_code)
+            .header("Content-Type", "Content-Type: application/json; charset=utf-8")
     }
 }
 
@@ -420,6 +451,7 @@ impl BodyContents {
 }
 
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum RequestType {
     Get,
     Post,
@@ -427,6 +459,7 @@ pub enum RequestType {
     Patch,
     Delete,
     Any,
+    Options,
 }
 
 impl RequestType {
@@ -436,6 +469,7 @@ impl RequestType {
     const PUT_TYPE: &str = "PUT";
     const DELETE_TYPE: &str = "DELETE";
     const ANY_TYPE: &str = "ANY";
+    const OPTIONS_TYPE: &str = "OPTIONS";
 
     pub fn type_for_method(method: &str) -> RequestType {
         match method {
@@ -444,6 +478,7 @@ impl RequestType {
             RequestType::PUT_TYPE => RequestType::Put,
             RequestType::PATCH_TYPE => RequestType::Patch,
             RequestType::DELETE_TYPE => RequestType::Delete,
+            RequestType::OPTIONS_TYPE => RequestType::Options,
             _ => RequestType::Any,
         }
     }
@@ -461,6 +496,7 @@ impl Display for RequestType {
             RequestType::Delete => RequestType::DELETE_TYPE.to_string(),
             RequestType::Patch => RequestType::PATCH_TYPE.to_string(),
             RequestType::Any => RequestType::ANY_TYPE.to_string(),
+            RequestType::Options => RequestType::OPTIONS_TYPE.to_string()
         })
     }
 }

@@ -40,18 +40,12 @@ pub async fn treat_user_data(_req: Request, db: PostgresConn) -> Result<RouteDat
     RouteData {}
 }
 
-pub fn postfix(response: Response) -> Response {
-    response
-        .header("Access-Control-Allow-Origin", "*")
-        .header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
-}
-
 #[tokio::main]
 async fn main() {
     let config = DatabaseConfig::new();
     let mut server = tusk_rs::Server::new(9000, config, treat_user_data()).await;
     server.register(get_users());
     server.register(create_user());
-    server.set_postfix(postfix);
+    server.set_cors("*", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
     server.start().await;
 }

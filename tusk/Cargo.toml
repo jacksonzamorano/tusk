@@ -15,3 +15,4 @@ tusk-rs-derive = { path = "../tusk-derive" }
 deadpool-postgres = { version = "0.10.2" }
 postgres-openssl = "0.5.0"
 openssl = "0.10.55"
+chrono = "0.4.31"
