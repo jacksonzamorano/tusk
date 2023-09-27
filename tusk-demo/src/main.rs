@@ -20,8 +20,8 @@ pub async fn get_users(_req: Request, db: PostgresConn, _data: RouteData) -> Res
     ))
 }
 
-#[route(Post /)]
-pub async fn create_user(req: Request, db: PostgresConn, _data: RouteData) -> Result<Response, RouteError> {
+#[route(Post / test_interceptor)]
+pub async fn create_user(req: Request, db: PostgresConn, data: RouteData) -> Result<Response, RouteError> {
     let json = req.body.as_json_object();
     let user_name = json_string!(json, "name");
     let user_email = json_string!(json, "email");
@@ -33,6 +33,10 @@ pub async fn create_user(req: Request, db: PostgresConn, _data: RouteData) -> Re
 
     let inserted_user = new_user.insert(&db).await;
     Ok(Response::json(&inserted_user))
+}
+
+pub async fn test_interceptor(_req: &Request, _db: &PostgresConn, _data: &RouteData) -> Result<(), RouteError> {
+    return Ok(())
 }
 
 #[treatment]

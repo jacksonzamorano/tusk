@@ -20,7 +20,7 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
         .map(|x| x.ident.as_ref().unwrap().to_string())
         .collect::<Vec<_>>();
 
-    let field_create = fields.iter().map(|x| { 
+    let field_create = fields.iter().map(|x| {
         let x_name_ident = format_ident!("{}", x);
         quote! {
             #x_name_ident: row.get(#x)
@@ -35,11 +35,11 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     };
 
-    let (parsed, params) =
-        AutoQueryParser::parse(args.to_string(), provided_table_name)
-            .into_token_stream(provided_struct_name, &fields);
+    let (parsed, params) = AutoQueryParser::parse(args.to_string(), provided_table_name)
+        .into_token_stream(provided_struct_name, &fields);
 
-    let creator = autoquery::create_insert_fn(provided_struct_name, &provided_struct.fields, &params);
+    let creator =
+        autoquery::create_insert_fn(provided_struct_name, &provided_struct.fields, &params);
 
     quote! {
         #provided_struct
@@ -61,7 +61,7 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     let route_type = params[0].clone();
     let route_type_ident = format_ident!("{}", route_type);
-    let route_name = params[1..].join("");
+    let route_name = params[1].clone();
 
     let data = parse_macro_input!(input as ItemFn);
     let data_name = &data.sig.ident;
@@ -79,10 +79,25 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
         .to_token_stream()
         .to_string();
     let type_vals = inputs_last.split(':').collect::<Vec<&str>>();
-    let mod_type = format_ident!(
-        "{}",
-        type_vals[1].to_string().replace(['&', ' '], "")
-    );
+    let mod_type = format_ident!("{}", type_vals[1].to_string().replace(['&', ' '], ""));
+
+    let interceptor = if params.len() > 2 {
+        let inputs_formatted = data_args
+            .iter()
+            .map(|x| {
+                let name = format_ident!("{}", x.to_token_stream().to_string().split(':').next().unwrap().trim());
+                quote! {
+                    &#name
+                }
+            })
+            .collect::<Vec<_>>();
+        let route_fn = format_ident!("{}", params[2]);
+        quote! {
+            #route_fn(#(#inputs_formatted),*).await?;
+        }
+    } else {
+        quote! {}
+    };
 
     quote! {
         pub fn #data_name() -> tusk_rs::Route<#mod_type> {
@@ -92,7 +107,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
                 Box::new(move |a,b,c| Box::pin(#int_fn_name(a,b,c)))
             )
         }
-        async fn #int_fn_name(#data_args) #data_out #data_block
+        async fn #int_fn_name(#data_args) #data_out {
+            #interceptor
+            #data_block
+        }
     }
     .into()
 }
