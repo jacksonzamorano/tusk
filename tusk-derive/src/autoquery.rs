@@ -330,8 +330,8 @@ impl QueryType {
             }
             QueryType::Delete => QueryPreface {
                 query: format!("DELETE FROM {}", table_params.table_name),
-                return_type: quote! {()},
-                post_query: quote! {;},
+                return_type: quote! { bool },
+                post_query: quote! {.is_ok()},
                 arg_count: 0,
                 args: quote! {},
             },

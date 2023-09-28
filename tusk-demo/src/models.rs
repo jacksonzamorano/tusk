@@ -11,6 +11,7 @@ pub struct RouteData {
     select_id select_one [id:i32] 'where id = $1'
     update_id update [id:i32] 'where id = $id'
     select_all select [] ''
+    delete_id delete [id:i32] 'where id=$1'
 ")]
 pub struct User {
     pub id: Option<i32>,
