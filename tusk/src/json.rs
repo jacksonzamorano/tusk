@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 use chrono::{DateTime, Utc};
 use super::RouteError;
 
@@ -21,7 +21,7 @@ impl JsonObject {
     ///
     /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonObject {
-        let json = json[0..json.chars().count() - 1].to_string();
+        let json = json[0..json.chars().count()].to_string();
         let mut keys: HashMap<String, JsonChild> = HashMap::new();
 
         let mut current_key = String::new();
@@ -32,24 +32,22 @@ impl JsonObject {
         while let Some(c) = enumerator.next() {
             if c == '"' {
                 // Get key content.
-                while let Some(key_content) = enumerator.next() {
+                'key: while let Some(key_content) = enumerator.next() {
                     if key_content != '"' {
                         current_key.push(key_content)
                     } else {
                         // Skip the colon
                         enumerator.next();
-                        break;
+                        break 'key;
                     }
                 }
 
                 // Get value of derived key
                 let mut value_start = ' ';
-                for value_spacing in enumerator.by_ref() {
-                    if value_spacing != ' ' {
-                        value_start = value_spacing;
-                        break;
-                    }
+                while value_start == ' ' {
+                    value_start = enumerator.next().unwrap();
                 }
+
                 current_subkey.content_type = JsonType::type_for_delimiter(value_start);
 
                 // Read value
@@ -112,7 +110,6 @@ impl JsonObject {
                         }
                     }
                 }
-
                 keys.insert(current_key, current_subkey);
 
                 current_key = String::new();
@@ -159,7 +156,7 @@ impl JsonArray {
     /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonArray {
         let mut values: Vec<JsonChild> = Vec::new();
-        let json = json[1..json.chars().count() - 1].to_string();
+        let json = json[1..json.chars().count()].to_string();
 
         let mut enumerator = json.chars().peekable();
         let mut current_value = JsonChild::new();
@@ -296,7 +293,7 @@ enum JsonType {
 
 impl JsonType {
     pub fn is_primitive(&self) -> bool {
-        *self == JsonType::Number || *self == JsonType::Boolean
+        *self == JsonType::Number || *self == JsonType::Boolean || *self == JsonType::Null
     }
     pub fn type_for_delimiter(dlm: char) -> JsonType {
         if dlm.is_ascii_digit() {
@@ -471,7 +468,7 @@ impl<T: JsonRetrieve> JsonRetrieve for Vec<T> {
 impl<T: JsonRetrieve> JsonRetrieve for Option<T> {
     fn parse(value: Option<&JsonChild>) -> Option<Self> {
         if let Some(v) = value {
-            if v.content_type == JsonType::Null {
+            if v.content_type != JsonType::Null {
                 return Some(T::parse(value))
             }
         }

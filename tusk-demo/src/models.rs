@@ -32,5 +32,6 @@ pub struct Client {
 
 #[derive(ToJson, FromJson)]
 pub struct BulkUserUpload {
-    pub users: Option<Vec<User>>
+    pub user: User,
+    pub clients: Vec<Client>
 }
