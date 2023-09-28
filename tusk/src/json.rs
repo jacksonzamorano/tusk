@@ -21,7 +21,6 @@ impl JsonObject {
     ///
     /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonObject {
-        let json = json[0..json.chars().count()].to_string();
         let mut keys: HashMap<String, JsonChild> = HashMap::new();
 
         let mut current_key = String::new();
@@ -71,7 +70,7 @@ impl JsonObject {
                     // but primitives do not.
                     current_subkey.contents.push(value_start);
                     for inner_value in enumerator.by_ref() {
-                        if inner_value != ',' {
+                        if inner_value != ',' && inner_value != '}' {
                             current_subkey.contents.push(inner_value)
                         } else {
                             break;
