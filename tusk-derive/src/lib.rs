@@ -5,7 +5,6 @@ mod autoquery;
 use autoquery::AutoQueryParser;
 use proc_macro::TokenStream;
 use quote::{format_ident, ToTokens};
-use std::str::FromStr;
 use syn::{parse_macro_input, ItemFn, ItemStruct};
 
 #[proc_macro_attribute]
@@ -175,56 +174,34 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(ToJson)]
 pub fn derive_to_json(item: TokenStream) -> TokenStream {
-    let struct_string = item.to_string();
-    let mut struct_head = struct_string.split('{').collect::<Vec<&str>>()[0]
-        .split(' ')
-        .collect::<Vec<&str>>();
-    if struct_head.last().unwrap().is_empty() {
-        struct_head.remove(struct_head.len() - 1);
-    }
-    let struct_name = struct_head.last().unwrap().replace('\n', "");
+    let struct_ident = parse_macro_input!(item as ItemStruct);
 
-    let struct_fields_string = struct_string.split('{').collect::<Vec<&str>>()[1].replace('}', "");
-    let struct_fields = struct_fields_string
-        .split(',')
-        .filter(|x| !x.trim().is_empty())
-        .collect::<Vec<&str>>()
-        .iter()
-        .map(|x| {
-            let vals = x.split(':').collect::<Vec<&str>>();
-            let field_details = vals[0].trim().split(' ').last().unwrap().to_string();
-            let struct_type = vals[1].trim().to_string();
-            (field_details, struct_type)
-        })
-        .collect::<Vec<(String, String)>>();
+    let struct_name = struct_ident.ident;
+    let struct_fields = struct_ident.fields.iter().map(|x| {
+        let x_ident = &x.ident;
+        let x_key = x.ident.to_token_stream().to_string();
+        quote! {
+            output += "\"";
+            output += #x_key;
+            output += "\" : ";
+            output += &self.#x_ident.to_json();
+            output += ",";
+        }
+    });
 
-    let quote = "\\\"";
 
-    let mut output = String::new();
-    output += "impl tusk_rs::json::ToJson for ";
-    output += &struct_name;
-    output += " {\n";
-    output += "fn to_json(&self) -> String {\n";
-    output += "let mut output = String::new();";
-    output += "output += \"{\";";
-    for f in struct_fields {
-        output += "output += \"";
-        output += quote;
-        output += &f.0;
-        output += quote;
-        output += "\"";
-        output += ";\n";
-        output += "output += \":\";";
-        output += "output += &self.";
-        output += &f.0;
-        output += ".to_json()";
-        output += ";\n";
-        output += "output += \",\";";
-    }
-    output += "output = output[0..output.chars().count() - 1].to_string();\n";
-    output += "output += \"}\";";
-    output += "return output;\n}";
-    output += "\n}";
+    let output_new = quote! {
+        impl tusk_rs::json::ToJson for #struct_name {
+            fn to_json(&self) -> String {
+                let mut output = String::new();
+                output += "{";
+                #(#struct_fields)*
+                output = output[0..output.chars().count() - 1].to_string();
+                output += "}";
+                return output;
+            }
+        }
+    };
 
-    TokenStream::from_str(&output).unwrap()
+    output_new.into()
 }

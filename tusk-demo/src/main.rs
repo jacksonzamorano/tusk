@@ -1,6 +1,6 @@
 use tusk_rs::{Request, RouteError, Route, Response};
 use tusk_rs_derive::ToJson;
-use models::{RouteData, User};
+use models::{RouteData, User, Client};
 use tusk_rs::{config::DatabaseConfig, PostgresConn};
 use tusk_rs_derive::{route, treatment};
 mod models;
@@ -16,7 +16,7 @@ struct RootResponse {
 #[route(Get /)]
 pub async fn get_users(_req: Request, db: PostgresConn, _data: RouteData) -> Result<Response, RouteError> {
     Ok(Response::json(
-        &User::select_all(&db).await
+        &Client::select_all(&db).await
     ))
 }
 
@@ -46,7 +46,11 @@ pub async fn treat_user_data(_req: Request, db: PostgresConn) -> Result<RouteDat
 
 #[tokio::main]
 async fn main() {
-    let config = DatabaseConfig::new();
+    let config = DatabaseConfig::new()
+        .host("192.168.1.3")
+        .username("jacksonzamorano")
+        .password("LastBastion080202")
+        .database("onecallmaterials_next");
     let mut server = tusk_rs::Server::new(9000, config, treat_user_data()).await;
     server.register(get_users());
     server.register(create_user());

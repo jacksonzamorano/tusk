@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-
+use chrono::{DateTime, Utc};
 use super::RouteError;
 
 /// A JSON structure that is formatted
@@ -419,6 +419,11 @@ impl<K: AsRef<str>, V: ToJson> ToJson for HashMap<K, V> {
         output
     }
 }
+impl ToJson for DateTime<Utc> {
+    fn to_json(&self) -> String {
+        self.to_rfc3339()
+    }
+}
 
 pub trait JsonRetrieve {
     fn parse(value: &JsonChild) -> Option<Self>
@@ -465,5 +470,10 @@ impl JsonRetrieve for JsonArray {
             return Some(JsonArray::from_string(value.contents.clone()));
         }
         None
+    }
+}
+impl JsonRetrieve for DateTime<Utc> {
+    fn parse(value: &JsonChild) -> Option<Self> {
+        Some(DateTime::parse_from_rfc3339(&value.contents).ok()?.with_timezone(&Utc))
     }
 }
