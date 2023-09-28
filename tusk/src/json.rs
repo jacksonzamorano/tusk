@@ -421,7 +421,7 @@ impl<K: AsRef<str>, V: ToJson> ToJson for HashMap<K, V> {
 }
 impl ToJson for DateTime<Utc> {
     fn to_json(&self) -> String {
-        self.to_rfc3339()
+        format!("\"{}\"", self.to_rfc3339())
     }
 }
 
