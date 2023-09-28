@@ -6,7 +6,7 @@ pub mod server;
 pub type PostgresConn = Object;
 pub use config::DatabaseConfig;
 pub use database::{Database, DatabaseError};
-pub use json::{JsonArray, JsonObject, ToJson};
+pub use json::{JsonArray, JsonObject, ToJson, FromJson};
 pub use reqres::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
 pub use server::{Route, Server, IncomingRequest};
 use deadpool_postgres::Object;

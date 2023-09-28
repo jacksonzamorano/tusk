@@ -129,8 +129,7 @@ impl JsonObject {
     ///
     /// * `key` — The key to retrieve from.
     pub fn get<T: JsonRetrieve>(&self, key: &str) -> Option<T> {
-        let child = self.keys.get(key)?;
-        T::parse(child)
+        T::parse(self.keys.get(key))
     }
 
     /// A convienience function that calls the `get` method
@@ -258,14 +257,14 @@ impl JsonArray {
     ///
     /// * `index` — The index to retrieve from.
     pub fn get<T: JsonRetrieve>(&self, index: usize) -> Option<T> {
-        T::parse(self.values.get(index)?)
+        T::parse(self.values.get(index))
     }
 
     /// Converts all elements of this JSONArray
     /// to a type that implements JsonRetrieve.
     /// Drops any types that are not parsed properly.
     pub fn map<T: JsonRetrieve>(&self) -> Vec<T> {
-        self.values.iter().filter_map(|x| T::parse(x)).collect()
+        self.values.iter().filter_map(|x| T::parse(Some(x))).collect()
     }
 }
 
@@ -292,6 +291,7 @@ enum JsonType {
     Boolean,
     Object,
     Array,
+    Null,
 }
 
 impl JsonType {
@@ -309,6 +309,8 @@ impl JsonType {
             JsonType::Array
         } else if dlm == '{' {
             JsonType::Object
+        } else if dlm == 'n' {
+            JsonType::Null
         } else {
             panic!("Unexpected value {}", dlm);
         }
@@ -321,6 +323,11 @@ pub trait ToJson {
     /// ToJson creates a JSON string from
     /// anything which implements it
     fn to_json(&self) -> String;
+}
+
+pub trait FromJson {
+    fn from_json(json: &JsonObject) -> Option<Self> where Self: Sized;
+    fn from_json_validated(json: &JsonObject) -> Result<Self, RouteError> where Self: Sized;
 }
 
 impl ToJson for String {
@@ -426,54 +433,74 @@ impl ToJson for DateTime<Utc> {
 }
 
 pub trait JsonRetrieve {
-    fn parse(value: &JsonChild) -> Option<Self>
+    fn parse(value: Option<&JsonChild>) -> Option<Self>
     where
         Self: Sized;
 }
 
 impl JsonRetrieve for String {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        Some(value.contents.clone())
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        Some(value?.contents.clone())
     }
 }
 impl JsonRetrieve for i32 {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        value.contents.parse().ok()
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        value?.contents.parse().ok()
     }
 }
 impl JsonRetrieve for i64 {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        value.contents.parse().ok()
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        value?.contents.parse().ok()
     }
 }
 impl JsonRetrieve for f32 {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        value.contents.parse().ok()
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        value?.contents.parse().ok()
     }
 }
 impl JsonRetrieve for f64 {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        value.contents.parse().ok()
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        value?.contents.parse().ok()
+    }
+}
+impl<T: JsonRetrieve> JsonRetrieve for Vec<T> {
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        Some(JsonArray::from_string(value?.contents.clone()).map())
+    }
+}
+impl<T: JsonRetrieve> JsonRetrieve for Option<T> {
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        if let Some(v) = value {
+            if v.content_type == JsonType::Null {
+                return Some(T::parse(value))
+            }
+        }
+        Some(None)
     }
 }
 impl JsonRetrieve for JsonObject {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        if value.content_type == JsonType::Object {
-            return Some(JsonObject::from_string(value.contents.clone()));
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        if value?.content_type == JsonType::Object {
+            return Some(JsonObject::from_string(value?.contents.clone()));
         }
         None
     }
 }
 impl JsonRetrieve for JsonArray {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        if value.content_type == JsonType::Array {
-            return Some(JsonArray::from_string(value.contents.clone()));
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        if value?.content_type == JsonType::Array {
+            return Some(JsonArray::from_string(value?.contents.clone()));
         }
         None
     }
 }
 impl JsonRetrieve for DateTime<Utc> {
-    fn parse(value: &JsonChild) -> Option<Self> {
-        Some(DateTime::parse_from_rfc3339(&value.contents).ok()?.with_timezone(&Utc))
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        Some(DateTime::parse_from_rfc3339(&value?.contents).ok()?.with_timezone(&Utc))
+    }
+}
+impl<T: FromJson> JsonRetrieve for T {
+    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+        Self::from_json(&JsonObject::from_string(value?.contents.clone()))
     }
 }

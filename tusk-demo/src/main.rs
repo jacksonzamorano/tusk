@@ -1,6 +1,6 @@
-use tusk_rs::{Request, RouteError, Route, Response};
+use tusk_rs::{Request, RouteError, Route, Response, FromJson};
 use tusk_rs_derive::ToJson;
-use models::{RouteData, User, Client};
+use models::{RouteData, User, BulkUserUpload};
 use tusk_rs::{config::DatabaseConfig, PostgresConn};
 use tusk_rs_derive::{route, treatment};
 mod models;
@@ -13,11 +13,11 @@ struct RootResponse {
     version: i32
 }
 
-#[route(Get /)]
-pub async fn get_users(_req: Request, db: PostgresConn, _data: RouteData) -> Result<Response, RouteError> {
-    Ok(Response::json(
-        &Client::select_all(&db).await
-    ))
+#[route(Post /test)]
+pub async fn get_users(req: Request, _db: PostgresConn, _data: RouteData) -> Result<Response, RouteError> {
+    let json = &req.body.as_json_object();
+    let recycle = BulkUserUpload::from_json_validated(&json)?;
+    Ok(Response::json(&recycle))
 }
 
 #[route(Post / : test_interceptor)]

@@ -205,3 +205,41 @@ pub fn derive_to_json(item: TokenStream) -> TokenStream {
 
     output_new.into()
 }
+
+#[proc_macro_derive(FromJson)]
+pub fn derive_from_json(item: TokenStream) -> TokenStream {
+    let strct = parse_macro_input!(item as ItemStruct);
+    let struct_name = &strct.ident;
+
+    let fields_get = strct.fields.iter().map(|x| {
+        let x_ident = &x.ident;
+        let x_key = x.ident.to_token_stream().to_string();
+        quote! {
+            #x_ident: json.get(#x_key)?
+        }
+    });
+
+    let fields_validate_get = strct.fields.iter().map(|x| {
+        let x_ident = &x.ident;
+        let x_key = x.ident.to_token_stream().to_string();
+        let x_msg = format!("{} is required", x_key);
+        quote! {
+            #x_ident: json.validate_get(#x_key, #x_msg)?
+        }
+    });
+
+    quote! {
+        impl tusk_rs::json::FromJson for #struct_name {
+            fn from_json(json: &tusk_rs::json::JsonObject) -> Option<#struct_name> {
+                Some(#struct_name {
+                    #(#fields_get),*
+                })
+            }
+            fn from_json_validated(json: &tusk_rs::json::JsonObject) -> Result<#struct_name, tusk_rs::RouteError> {
+                Ok(#struct_name {
+                    #(#fields_validate_get),*
+                })
+            }
+        }
+    }.into()
+}
