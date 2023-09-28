@@ -35,12 +35,3 @@ pub struct BulkUserUpload {
     pub user: User,
     pub clients: Vec<Client>
 }
-
-#[derive(ToJson, FromJson, Debug)]
-pub struct DriverRequestData {
-    id: Option<i32>,
-    firstname: String,
-    lastname: String,
-    phonenumber: String,
-    trucknumber: Option<String>,
-}

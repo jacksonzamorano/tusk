@@ -1,6 +1,6 @@
 use tusk_rs::{Request, RouteError, Route, Response, FromJson};
 use tusk_rs_derive::ToJson;
-use models::{RouteData, User, BulkUserUpload, DriverRequestData};
+use models::{RouteData, User, BulkUserUpload};
 use tusk_rs::{config::DatabaseConfig, PostgresConn};
 use tusk_rs_derive::{route, treatment};
 mod models;
@@ -16,7 +16,7 @@ struct RootResponse {
 #[route(Post /test)]
 pub async fn get_users(req: Request, _db: PostgresConn, _data: RouteData) -> Result<Response, RouteError> {
     let json = &req.body.as_json_object();
-    let recycle = DriverRequestData::from_json_validated(&json)?;
+    let recycle = BulkUserUpload::from_json_validated(&json)?;
     Ok(Response::json(&recycle))
 }
 
@@ -46,11 +46,7 @@ pub async fn treat_user_data(_req: Request, db: PostgresConn) -> Result<RouteDat
 
 #[tokio::main]
 async fn main() {
-    let config = DatabaseConfig::new()
-        .host("192.168.1.3")
-        .username("jacksonzamorano")
-        .password("LastBastion080202")
-        .database("onecallmaterials_next");
+    let config = DatabaseConfig::new();
     let mut server = tusk_rs::Server::new(9000, config, treat_user_data()).await;
     server.register(get_users());
     server.register(create_user());
