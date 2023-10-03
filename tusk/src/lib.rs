@@ -10,7 +10,7 @@ pub use database::{Database, DatabaseError};
 pub use json::{JsonArray, JsonObject, ToJson, FromJson};
 pub use reqres::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
 pub use server::{Route, Server, IncomingRequest};
-pub use query::{FromSql, SelectQuery, ColumnName, TableType, WhereType, QueryObject, UpdatableObject, WhereClause, WhereClauseData};
+pub use query::{FromSql, SelectQuery, ColumnName, TableType, WhereType, QueryObject, UpdatableObject, UpdateQuery, WhereClause, WhereClauseData};
 use deadpool_postgres::Object;
 pub use tokio_postgres::{Row, types::ToSql, error::SqlState};
 pub use tusk_rs_derive::{ToJson, FromJson, autoquery, route, treatment};

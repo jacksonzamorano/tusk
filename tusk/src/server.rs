@@ -1,11 +1,12 @@
+use super::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
+use crate::{config::DatabaseConfig, database::Database};
+use deadpool_postgres::Object;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use tokio::io::{AsyncWriteExt, AsyncReadExt, BufReader};
+
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
-use deadpool_postgres::Object;
-use crate::{config::DatabaseConfig, database::Database};
-use super::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
 
 /// The core of Tusk, `Server` is a async/await ready
 /// web server.
@@ -19,22 +20,29 @@ pub struct Server<T> {
     treatment: AsyncTreatmentHandler<T>,
     postfix: Option<fn(Response) -> Response>,
     cors_origin: String,
-    cors_headers: String
+    cors_headers: String,
 }
 impl<T: 'static> Server<T> {
     /// Create a new server.
     /// Specify a port, [`DatabaseConfig`], and an async
     /// function with arguments [`Request`] and a PostgresConn
     /// (alias for [`Object`]) and returns `T`.
-    pub async fn new(port: i32, database: DatabaseConfig, treatment: AsyncTreatmentHandler<T>) -> Server<T> {
+    pub async fn new(
+        port: i32,
+        database: DatabaseConfig,
+        treatment: AsyncTreatmentHandler<T>,
+    ) -> Server<T> {
         Server {
             routes: RouteStorage::new(),
-            listener: TcpListener::bind(format!("127.0.0.1:{}", port)).await.unwrap(),
+            listener: TcpListener::bind(format!("127.0.0.1:{}", port))
+                .await
+                .unwrap(),
             database: Database::new(database).await.unwrap(),
             treatment,
             postfix: None,
             cors_origin: "*".to_string(),
-            cors_headers: "Origin, X-Requested-With, Content-Type, Accept, Authorization".to_string()
+            cors_headers: "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+                .to_string(),
         }
     }
 
@@ -46,8 +54,16 @@ impl<T: 'static> Server<T> {
     }
     /// Register many `Route`s at once.
     pub fn module(&mut self, prefix: &str, rs: Vec<Route<T>>) {
-        let mut applied_prefix = if prefix.ends_with('/') { prefix[0..prefix.len()].to_string() } else { prefix.to_string() };
-        applied_prefix = if !applied_prefix.starts_with('/') { format!("/{}", applied_prefix) } else { applied_prefix };
+        let mut applied_prefix = if prefix.ends_with('/') {
+            prefix[0..prefix.len()].to_string()
+        } else {
+            prefix.to_string()
+        };
+        applied_prefix = if !applied_prefix.starts_with('/') {
+            format!("/{}", applied_prefix)
+        } else {
+            applied_prefix
+        };
         for mut r in rs {
             r.path = format!("{}{}", applied_prefix, r.path);
             self.routes.add(r);
@@ -70,7 +86,8 @@ impl<T: 'static> Server<T> {
     /// and then begins listening.
     pub async fn start(&mut self) {
         self.routes.prep();
-        let default: AsyncRouteHandler<T> = Box::new(move |a,b,c| Box::pin(Server::default_error(a,b,c)));
+        let default: AsyncRouteHandler<T> =
+            Box::new(move |a, b, c| Box::pin(Server::default_error(a, b, c)));
         loop {
             if let Ok(conn) = self.listener.accept().await {
                 let (mut req_stream, _) = conn;
@@ -82,7 +99,7 @@ impl<T: 'static> Server<T> {
                     bytes.append(&mut body.bytes());
                     _ = req_stream.write(&bytes).await;
                     continue;
-                }               
+                }
                 let mut matched_path: &AsyncRouteHandler<T> = &default;
                 if let Some(handler) = self
                     .routes
@@ -99,12 +116,16 @@ impl<T: 'static> Server<T> {
                 let mut bytes = Vec::new();
                 let mut response = match (self.treatment)(req.request, db_inst).await {
                     Ok((treat, req, obj)) => {
-                        let mut body = matched_path(req, obj, treat).await.unwrap_or_else(|x| x.to_response());
-                        if self.postfix.is_some() { body = self.postfix.unwrap()(body) }
+                        let mut body = matched_path(req, obj, treat)
+                            .await
+                            .unwrap_or_else(|x| x.to_response());
+                        if self.postfix.is_some() {
+                            body = self.postfix.unwrap()(body)
+                        }
                         body
                     }
-                    Err(error) => error.to_response()
-                };                
+                    Err(error) => error.to_response(),
+                };
                 response.apply_cors(&self.cors_origin, &self.cors_headers);
                 bytes.append(&mut response.get_header_data());
                 bytes.append(&mut response.bytes());
@@ -114,7 +135,9 @@ impl<T: 'static> Server<T> {
                 loop {
                     let written_bytes = req.stream.write(write_bytes).await;
                     if let Ok(wr_byt) = written_bytes {
-                        if wr_byt == write_bytes.len() { break };
+                        if wr_byt == write_bytes.len() {
+                            break;
+                        };
                         write_bytes = &write_bytes[wr_byt..];
                     } else {
                         break;
@@ -158,13 +181,19 @@ impl<T: 'static> Server<T> {
         let wo_query_sect = path[0].to_string();
 
         let mut created_request = Request {
-            path: if wo_query_sect.ends_with('/') { wo_query_sect[0..wo_query_sect.len() - 1].to_string() } else { wo_query_sect.to_string() },
+            path: if wo_query_sect.ends_with('/') {
+                wo_query_sect[0..wo_query_sect.len() - 1].to_string()
+            } else {
+                wo_query_sect.to_string()
+            },
             request_type: RequestType::type_for_method(head[0]),
             query: if let Some(q_d) = path.get(1) {
-                q_d.split('&').map(|x| {
-                    let q = x.split('=').collect::<Vec<&str>>();
-                    (q[0].to_string(), q.get(1).unwrap_or(&"").to_string())
-                }).collect()
+                q_d.split('&')
+                    .map(|x| {
+                        let q = x.split('=').collect::<Vec<&str>>();
+                        (q[0].to_string(), q.get(1).unwrap_or(&"").to_string())
+                    })
+                    .collect()
             } else {
                 HashMap::new()
             },
@@ -185,7 +214,9 @@ impl<T: 'static> Server<T> {
             let mut content: Vec<u8> = Vec::new();
             // Read body
             loop {
-                if content.len() == content_len { break; }
+                if content.len() == content_len {
+                    break;
+                }
                 if buffer.read_exact(&mut cur_char).await.is_ok() {
                     content.push(cur_char[0]);
                 }
@@ -212,7 +243,7 @@ impl<T: 'static> Server<T> {
 }
 
 /// A wrapper for a route.
-/// 
+///
 /// This struct is created by the `#[route(METHOD path)]` macro,
 /// when a function is decorated with that macro, the function is
 /// rewritten such that it returns the Route.
@@ -222,16 +253,16 @@ impl<T: 'static> Server<T> {
 /// - [`Request`]
 /// - [`Object`] (aliased to `tusk_rs::PostgresConn` for readability)
 /// - `T`
-/// 
+///
 /// It should return a `Result<Response, RouteError>`.
-/// 
+///
 /// Finally, it must be annotated with the `#[route(METHOD path)]`
 /// macro, as it rewrites your function to be passable
 /// to a route.
 pub struct Route<T> {
     pub path: String,
     pub request_type: RequestType,
-    pub handler: AsyncRouteHandler<T>
+    pub handler: AsyncRouteHandler<T>,
 }
 impl<T> Route<T> {
     /// A route can be manually created, but it is not
@@ -249,7 +280,7 @@ impl<T> Route<T> {
                 s_path
             },
             request_type,
-            handler
+            handler,
         }
     }
 }
@@ -281,11 +312,7 @@ impl<T> RouteStorage<T> {
         }
     }
 
-    fn handler(
-        &self,
-        request_type: &RequestType,
-        path: &String,
-    ) -> Option<&Route<T>> {
+    fn handler(&self, request_type: &RequestType, path: &String) -> Option<&Route<T>> {
         let handler_cat = match request_type {
             RequestType::Get => &self.routes_get,
             RequestType::Post => &self.routes_post,
@@ -327,5 +354,16 @@ impl<T> RouteStorage<T> {
     }
 }
 
-type AsyncRouteHandler<T> = Box<fn(Request, crate::PostgresConn, T) -> Pin<Box<dyn Future<Output = Result<Response, RouteError>>>>>;
-type AsyncTreatmentHandler<T> = Box<fn(Request, crate::PostgresConn) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::PostgresConn), RouteError>>>>>;
+type AsyncRouteHandler<T> = Box<
+    fn(
+        Request,
+        crate::PostgresConn,
+        T,
+    ) -> Pin<Box<dyn Future<Output = Result<Response, RouteError>>>>,
+>;
+type AsyncTreatmentHandler<T> = Box<
+    fn(
+        Request,
+        crate::PostgresConn,
+    ) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::PostgresConn), RouteError>>>>,
+>;

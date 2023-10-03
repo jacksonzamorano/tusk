@@ -141,6 +141,11 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
         })
         .collect::<Vec<_>>();
 
+    let cols_string = fields
+        .iter()
+        .map(|x| x.ident.as_ref().unwrap().to_string())
+        .collect::<Vec<_>>();
+
     quote! {
         pub enum #fields_name {
             #(#convs),*
@@ -150,6 +155,9 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
         impl tusk_rs::TableType for #name {
             fn table_name() -> &'static str {
                 return #t_name
+            }
+            fn cols() -> &'static [&'static str] {
+                return &[#(#cols_string),*]
             }
         }
         impl tusk_rs::UpdatableObject for #name {

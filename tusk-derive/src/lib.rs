@@ -19,13 +19,26 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
     let fields = provided_struct
         .fields
         .iter()
-        .map(|x| x.ident.as_ref().unwrap().to_string())
+        .map(|x| { 
+            let is_option = match &x.ty {
+                syn::Type::Path(x) => x.path.segments.last().map(|x| x.ident.to_string()).unwrap_or(String::new()) == "Option",
+                _ => false
+            };
+            (x.ident.as_ref().unwrap().to_string(), is_option)
+        })
         .collect::<Vec<_>>();
 
     let field_create = fields.iter().map(|x| {
-        let x_name_ident = format_ident!("{}", x);
-        quote! {
-            #x_name_ident: row.get(#x)
+        let x_name_ident = format_ident!("{}", x.0);
+        let x_name_str = &x.0;
+        if x.1 {
+            quote! {
+                #x_name_ident: row.try_get(#x_name_str).ok()
+            }
+        } else {
+            quote! {
+                #x_name_ident: row.get(#x_name_str)
+            }
         }
     });
 
