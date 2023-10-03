@@ -1,4 +1,3 @@
-
 use models::{NewUser, RouteData};
 use tusk_rs::{
     DatabaseConfig, PostgresConn, Request, Response, RouteError,
@@ -7,12 +6,6 @@ use tusk_rs_derive::{route, treatment};
 mod models;
 mod util;
 
-// #[derive(ToJson)]
-// struct RootResponse {
-//     user: Option<NewUser>,
-//     version: i32
-// }
-
 #[route(Get /)]
 pub async fn get_users(
     _req: Request,
@@ -20,8 +13,6 @@ pub async fn get_users(
     _data: RouteData,
 ) -> Result<Response, RouteError> {
     let users = NewUser::all_users(&db).await;
-    // dbg!(user);
-    // UpdateQuery::from(user).condition(NewUserQuery::new().id(QueryDetails::equals(Some(3))));
     Ok(Response::json(&users))
 }
 

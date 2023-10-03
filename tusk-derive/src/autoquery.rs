@@ -11,12 +11,12 @@ pub struct AutoqueryParams {
 impl AutoqueryParams {
     pub fn from_string(d: String) -> AutoqueryParams {
         let mut params = AutoqueryParams::default();
-        for args in d.split("|").filter(|x| x.trim() != "") {
-            let split = args.split("=").collect::<Vec<&str>>();
+        for args in d.split('|').filter(|x| x.trim() != "") {
+            let split = args.split('=').collect::<Vec<&str>>();
             match split[0].trim() {
                 "table_name" => params.table_name = split[1].trim().to_string(),
                 "ignore_keys" => {
-                    params.ignore_keys = split[1].split(",").map(|x| x.trim().to_string()).collect()
+                    params.ignore_keys = split[1].split(',').map(|x| x.trim().to_string()).collect()
                 }
                 _ => panic!("Unknown params '{}'", split[0]),
             }
@@ -100,7 +100,7 @@ pub fn select_query(name: &Ident, fields: &Fields) -> proc_macro2::TokenStream {
         impl tusk_rs::QueryObject for #struct_name {
             fn into_params(self) -> std::collections::HashMap::<&'static str, tusk_rs::WhereClauseData> { return self.data }
         }
-    }.into()
+    }
 }
 
 pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_macro2::TokenStream {
@@ -153,7 +153,7 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
             }
         }
         impl tusk_rs::UpdatableObject for #name {
-            fn into_params(&self) -> (&[&str], Vec<&(dyn tusk_rs::ToSql + Sync)>) {
+            fn as_params(&self) -> (&[&str], Vec<&(dyn tusk_rs::ToSql + Sync)>) {
                 return (
                     &[#(#cols),*],
                     vec![#(#data),*]
@@ -161,5 +161,4 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
             }
         }
     }
-    .into()
 }

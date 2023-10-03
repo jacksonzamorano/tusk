@@ -23,7 +23,7 @@ pub enum WhereType {
     GreaterThan,
 }
 impl WhereType {
-    fn into_expression(&self, column: &'static str, arg: usize) -> String {
+    fn as_expression(&self, column: &'static str, arg: usize) -> String {
         match *self {
             WhereType::Equals => format!("{} = ${}", column, arg),
             WhereType::NotEquals => format!("{} != ${}", column, arg),
@@ -40,10 +40,10 @@ pub struct WhereClauseData {
 }
 impl WhereClauseData {
     pub fn new<T: ToSql + Sync + 'static>(data: T, comparison: WhereType) -> WhereClauseData {
-        return WhereClauseData {
+        WhereClauseData {
             data: Box::new(data),
             comparison,
-        };
+        }
     }
 }
 
@@ -101,6 +101,7 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     }
 }
 
+#[derive(Default)]
 pub struct SelectQuery {
     where_data: HashMap<&'static str, WhereClauseData>,
     clauses: BTreeMap<SelectClause, String>,
@@ -108,11 +109,7 @@ pub struct SelectQuery {
 }
 impl SelectQuery {
     pub fn new() -> SelectQuery {
-        SelectQuery {
-            where_data: HashMap::new(),
-            clauses: BTreeMap::new(),
-            joins: Vec::new(),
-        }
+        SelectQuery::default()
     }
 
     pub fn limit(mut self, count: i64) -> Self {
@@ -157,16 +154,16 @@ impl SelectQuery {
         let (where_query, mut where_vars) = self.where_data.to_where(0);
         query += &where_query;
         variables.append(&mut where_vars);
-        if self.clauses.len() > 0 {
+        if !self.clauses.is_empty() {
             query += " "
         };
         query += &self.clauses.into_values().collect::<Vec<_>>().join(" ");
-        Some(db.query(&query, variables.as_slice()).await.ok()?)
+        db.query(&query, variables.as_slice()).await.ok()
     }
 
     pub async fn query_all<T: TableType + FromSql>(self, db: &PostgresConn) -> Option<Vec<T>> {
         Some(
-            self.query::<T>(&db)
+            self.query::<T>(db)
                 .await?
                 .iter()
                 .map(|x| T::from_postgres(x))
@@ -175,7 +172,7 @@ impl SelectQuery {
     }
 
     pub async fn query_one<T: TableType + FromSql>(self, db: &PostgresConn) -> Option<T> {
-        self.query::<T>(&db)
+        self.query::<T>(db)
             .await?
             .iter()
             .map(|x| T::from_postgres(x))
@@ -201,7 +198,7 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
     }
 
     pub async fn query(self, db: &PostgresConn) -> Option<Vec<Row>> {
-        let (keys, mut values) = self.update.into_params();
+        let (keys, mut values) = self.update.as_params();
         let mut query = format!(
             "UPDATE {} SET {}",
             T::table_name(),
@@ -221,7 +218,7 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
 
     pub async fn query_all(self, db: &PostgresConn) -> Option<Vec<T>> {
         Some(
-            self.query(&db)
+            self.query(db)
                 .await?
                 .iter()
                 .map(|x| T::from_postgres(x))
@@ -230,7 +227,7 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
     }
 
     pub async fn query_one(self, db: &PostgresConn) -> Option<T> {
-        self.query(&db)
+        self.query(db)
             .await?
             .iter()
             .map(|x| T::from_postgres(x))
@@ -238,14 +235,13 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
     }
 }
 
+#[derive(Default)]
 pub struct DeleteQuery {
     where_data: HashMap<&'static str, WhereClauseData>,
 }
 impl DeleteQuery {
     pub fn new() -> DeleteQuery {
-        DeleteQuery {
-            where_data: HashMap::new(),
-        }
+        DeleteQuery::default()
     }
 
     pub fn condition<S: QueryObject>(mut self, data: S) -> Self {
@@ -268,6 +264,7 @@ impl DeleteQuery {
 pub trait ColumnName {
     fn to_string(self) -> String;
 }
+
 #[derive(PartialEq, Eq, Ord, PartialOrd)]
 enum SelectClause {
     Limit = 1,
@@ -281,12 +278,12 @@ impl ToWhereClause for HashMap<&'static str, WhereClauseData> {
     fn to_where(&self, arg_offset: usize) -> (String, Vec<&(dyn ToSql + Sync)>) {
         let mut query = String::new();
         let mut variables = Vec::new();
-        if self.len() > 0 {
+        if !self.is_empty() {
             query += " WHERE "
         }
         let mut arg_idx: usize = 1 + arg_offset;
         for (column, data) in self.iter() {
-            query.push_str(&data.comparison.into_expression(column, arg_idx));
+            query.push_str(&data.comparison.as_expression(column, arg_idx));
             if arg_idx != self.len() {
                 query.push_str(" AND ")
             }
@@ -301,5 +298,5 @@ pub trait QueryObject {
     fn into_params(self) -> HashMap<&'static str, WhereClauseData>;
 }
 pub trait UpdatableObject {
-    fn into_params(&self) -> (&[&str], Vec<&(dyn ToSql + Sync)>);
+    fn as_params(&self) -> (&[&str], Vec<&(dyn ToSql + Sync)>);
 }

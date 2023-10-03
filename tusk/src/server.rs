@@ -112,7 +112,7 @@ impl<T: 'static> Server<T> {
                 let mut write_bytes = bytes.as_slice();
                 // Write stream
                 loop {
-                    let written_bytes = req.stream.write(&write_bytes).await;
+                    let written_bytes = req.stream.write(write_bytes).await;
                     if let Ok(wr_byt) = written_bytes {
                         if wr_byt == write_bytes.len() { break };
                         write_bytes = &write_bytes[wr_byt..];

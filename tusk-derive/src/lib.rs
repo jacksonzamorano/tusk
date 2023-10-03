@@ -14,7 +14,7 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
     let provided_table_name = format!("{}s", provided_struct_name.to_string().to_lowercase());
 
     let mut params = AutoqueryParams::from_string(args.to_string());
-    if params.table_name == "" { params.table_name = provided_table_name }
+    if params.table_name.is_empty() { params.table_name = provided_table_name }
 
     let fields = provided_struct
         .fields
