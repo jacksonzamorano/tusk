@@ -1,46 +1,32 @@
-use tusk_rs::{Request, RouteError, Route, Response, FromJson};
-use tusk_rs_derive::ToJson;
-use models::{RouteData, User, BulkUserUpload};
-use tusk_rs::{config::DatabaseConfig, PostgresConn};
+
+use models::{NewUser, RouteData};
+use tusk_rs::{
+    DatabaseConfig, PostgresConn, Request, Response, RouteError,
+};
 use tusk_rs_derive::{route, treatment};
 mod models;
 mod util;
 
+// #[derive(ToJson)]
+// struct RootResponse {
+//     user: Option<NewUser>,
+//     version: i32
+// }
 
-#[derive(ToJson)]
-struct RootResponse {
-    user: Option<User>,
-    version: i32
-}
-
-#[route(Post /test)]
-pub async fn get_users(req: Request, _db: PostgresConn, _data: RouteData) -> Result<Response, RouteError> {
-    let json = &req.body.as_json_object();
-    let recycle = BulkUserUpload::from_json_validated(&json)?;
-    Ok(Response::json(&recycle))
-}
-
-#[route(Post / : test_interceptor)]
-pub async fn create_user(req: Request, db: PostgresConn, data: RouteData) -> Result<Response, RouteError> {
-    let json = req.body.as_json_object();
-    let user_name = json_string!(json, "name");
-    let user_email = json_string!(json, "email");
-    let new_user = User {
-        id: None,
-        name: user_name,
-        email: user_email
-    };
-
-    let inserted_user = new_user.insert(&db).await;
-    Ok(Response::json(&inserted_user))
-}
-
-pub async fn test_interceptor(_req: &Request, _db: &PostgresConn, _data: &RouteData) -> Result<(), RouteError> {
-    return Ok(())
+#[route(Get /)]
+pub async fn get_users(
+    _req: Request,
+    db: PostgresConn,
+    _data: RouteData,
+) -> Result<Response, RouteError> {
+    let users = NewUser::all_users(&db).await;
+    // dbg!(user);
+    // UpdateQuery::from(user).condition(NewUserQuery::new().id(QueryDetails::equals(Some(3))));
+    Ok(Response::json(&users))
 }
 
 #[treatment]
-pub async fn treat_user_data(_req: Request, db: PostgresConn) -> Result<RouteData, RouteError> {
+pub async fn treat_user_data(_req: Request, db: PostgresConn) -> RouteData {
     RouteData {}
 }
 
@@ -49,7 +35,9 @@ async fn main() {
     let config = DatabaseConfig::new();
     let mut server = tusk_rs::Server::new(9000, config, treat_user_data()).await;
     server.register(get_users());
-    server.register(create_user());
-    server.set_cors("*", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    server.set_cors(
+        "*",
+        "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+    );
     server.start().await;
 }

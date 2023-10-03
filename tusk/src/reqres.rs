@@ -1,6 +1,6 @@
 use chrono::{Utc, Datelike, Timelike};
 use super::{JsonArray, JsonObject, ToJson};
-use std::{collections::HashMap, fmt::{Display, Formatter}, matches};
+use std::{collections::{HashMap, BTreeMap}, fmt::{Display, Formatter}, matches};
 
 /// An incoming request. Information is extracted from 
 /// the HTTP request and placed nicely into the following fields.
@@ -26,7 +26,7 @@ pub struct Request {
 pub struct Response {
     pub data: Vec<u8>,
     pub status: ResponseStatusCode,
-    pub headers: HashMap<String, String>,
+    pub headers: BTreeMap<String, String>,
 }
 impl Response {
     const WEEKDAY_MAP: [&str;7] = [
@@ -58,7 +58,7 @@ impl Response {
         Response {
             data: Vec::new(),
             status: ResponseStatusCode::Ok,
-            headers: HashMap::new(),
+            headers: BTreeMap::new(),
         }
     }
 
@@ -70,7 +70,7 @@ impl Response {
         Response {
             data,
             status: ResponseStatusCode::Ok,
-            headers: HashMap::new(),
+            headers: BTreeMap::new(),
         }
         .header("Content-Type", "text/html").header("Content-Length", len.to_string())
         .header("Date", format!("{}, {} {} {} {:0>2}:{:0>2}:{:0>2} GMT",

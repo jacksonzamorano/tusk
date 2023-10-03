@@ -1,7 +1,7 @@
 use deadpool_postgres::{Object, Pool};
 use openssl::ssl::{SslConnector, SslMethod};
 use postgres_openssl::MakeTlsConnector;
-use tokio_postgres::NoTls;
+use tokio_postgres::{NoTls};
 
 use crate::config::DatabaseConfig;
 

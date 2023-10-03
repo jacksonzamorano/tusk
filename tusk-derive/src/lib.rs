@@ -2,7 +2,7 @@
 extern crate quote;
 extern crate proc_macro;
 mod autoquery;
-use autoquery::AutoQueryParser;
+use crate::autoquery::AutoqueryParams;
 use proc_macro::TokenStream;
 use quote::{format_ident, ToTokens};
 use syn::{parse_macro_input, ItemFn, ItemStruct};
@@ -12,6 +12,9 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
     let provided_struct = parse_macro_input!(input as ItemStruct);
     let provided_struct_name = &provided_struct.ident;
     let provided_table_name = format!("{}s", provided_struct_name.to_string().to_lowercase());
+
+    let mut params = AutoqueryParams::from_string(args.to_string());
+    if params.table_name == "" { params.table_name = provided_table_name }
 
     let fields = provided_struct
         .fields
@@ -27,26 +30,28 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
     });
 
     let constructor = quote! {
-        pub fn from_postgres(row: &tusk_rs::Row) -> #provided_struct_name {
+        fn from_postgres(row: &tusk_rs::Row) -> #provided_struct_name {
             #provided_struct_name {
                 #(#field_create),*
             }
         }
     };
 
-    let (parsed, params) = AutoQueryParser::parse(args.to_string(), provided_table_name)
-        .into_token_stream(provided_struct_name, &fields);
-
     let creator =
         autoquery::create_insert_fn(provided_struct_name, &provided_struct.fields, &params);
+    let select = autoquery::select_query(provided_struct_name, &provided_struct.fields);
+    let extras = autoquery::extras(provided_struct_name, &provided_struct.fields, &params);
 
     quote! {
         #provided_struct
-        impl #provided_struct_name {
+        impl tusk_rs::FromSql for #provided_struct_name {
             #constructor
-            #creator
-            #parsed
         }
+        impl #provided_struct_name {
+            #creator
+        }
+        #select
+        #extras
     }
     .into()
 }
@@ -103,7 +108,7 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
 
     quote! {
         pub fn #data_name() -> tusk_rs::Route<#mod_type> {
-            Route::new(
+            tusk_rs::Route::new(
                 #route_name.to_string(),
                 tusk_rs::RequestType::#route_type_ident,
                 Box::new(move |a,b,c| Box::pin(#int_fn_name(a,b,c)))
@@ -196,7 +201,7 @@ pub fn derive_to_json(item: TokenStream) -> TokenStream {
                 let mut output = String::new();
                 output += "{";
                 #(#struct_fields)*
-                output = output[0..output.chars().count() - 1].to_string();
+                output.pop();
                 output += "}";
                 return output;
             }

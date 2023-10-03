@@ -97,22 +97,29 @@ impl<T: 'static> Server<T> {
                 };
                 let db_inst = self.database.get_connection().await.unwrap();
                 let mut bytes = Vec::new();
-                match (self.treatment)(req.request, db_inst).await {
+                let mut response = match (self.treatment)(req.request, db_inst).await {
                     Ok((treat, req, obj)) => {
                         let mut body = matched_path(req, obj, treat).await.unwrap_or_else(|x| x.to_response());
                         if self.postfix.is_some() { body = self.postfix.unwrap()(body) }
-                        body.apply_cors(&self.cors_origin, &self.cors_headers);
-                        bytes.append(&mut body.get_header_data());
-                        bytes.append(&mut body.bytes())
+                        body
                     }
-                    Err(error) => {
-                        let err_req = error.to_response();
-                        bytes.append(&mut err_req.get_header_data());
-                        bytes.append(&mut err_req.bytes());
+                    Err(error) => error.to_response()
+                };                
+                response.apply_cors(&self.cors_origin, &self.cors_headers);
+                bytes.append(&mut response.get_header_data());
+                bytes.append(&mut response.bytes());
+
+                let mut write_bytes = bytes.as_slice();
+                // Write stream
+                loop {
+                    let written_bytes = req.stream.write(&write_bytes).await;
+                    if let Ok(wr_byt) = written_bytes {
+                        if wr_byt == write_bytes.len() { break };
+                        write_bytes = &write_bytes[wr_byt..];
+                    } else {
+                        break;
                     }
                 }
-                // Write stream
-                _ = req.stream.write(&bytes).await;
             }
         }
     }
@@ -156,7 +163,7 @@ impl<T: 'static> Server<T> {
             query: if let Some(q_d) = path.get(1) {
                 q_d.split('&').map(|x| {
                     let q = x.split('=').collect::<Vec<&str>>();
-                    (q[0].to_string(), q[1].to_string())
+                    (q[0].to_string(), q.get(1).unwrap_or(&"").to_string())
                 }).collect()
             } else {
                 HashMap::new()
