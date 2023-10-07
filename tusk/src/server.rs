@@ -202,13 +202,13 @@ impl<T: 'static> Server<T> {
                 .iter()
                 .map(|a| {
                     let d: Vec<&str> = a.split(": ").collect();
-                    (d[0].to_string(), d[1].to_string())
+                    (d[0].to_string().to_lowercase(), d[1].to_string())
                 })
                 .collect(),
             body: BodyContents::None,
         };
 
-        if let Some(content_length_str) = created_request.headers.get("Content-Length") {
+        if let Some(content_length_str) = created_request.headers.get("content-length") {
             // We have a body.
             let content_len: usize = content_length_str.parse().unwrap_or(0);
             let mut content: Vec<u8> = Vec::new();
@@ -221,7 +221,7 @@ impl<T: 'static> Server<T> {
                     content.push(cur_char[0]);
                 }
             }
-            if let Some(content_type) = created_request.headers.get("Content-Type") {
+            if let Some(content_type) = created_request.headers.get("content-type") {
                 let no_charset = content_type.split(' ').collect::<Vec<&str>>()[0].replace(';', "");
                 created_request.body = BodyContents::type_from_mime(&no_charset, content);
             } else {
