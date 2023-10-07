@@ -124,6 +124,7 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
 
     let cols = fields
         .iter()
+        .filter(|x| !params.ignore_keys.contains(&x.ident.as_ref().unwrap().to_string()))
         .map(|x| {
             let col_name = x.ident.as_ref().unwrap().to_string();
             quote! {
@@ -133,6 +134,7 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
         .collect::<Vec<_>>();
     let data = fields
         .iter()
+        .filter(|x| !params.ignore_keys.contains(&x.ident.as_ref().unwrap().to_string()))
         .map(|x| {
             let col_name_ident = &x.ident;
             quote! {

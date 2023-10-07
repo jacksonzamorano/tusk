@@ -176,6 +176,8 @@ impl SelectQuery {
             query += " "
         };
         query += &self.clauses.into_values().collect::<Vec<_>>().join(" ");
+        // dbg!(&query);
+        // dbg!(variables.as_slice());
         db.query(&query, variables.as_slice()).await.ok()
     }
 
@@ -210,33 +212,42 @@ impl SelectQuery {
 
 pub struct UpdateQuery<T: UpdatableObject> {
     where_data: HashMap<&'static str, WhereClauseData>,
+    ignore_keys: Vec<&'static str>,
     update: T,
 }
 impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
     pub fn from(obj: T) -> UpdateQuery<T> {
         UpdateQuery {
             where_data: HashMap::new(),
+            ignore_keys: Vec::new(),
             update: obj,
         }
     }
 
+    pub fn ignore(mut self, column: &'static str) -> Self {
+        self.ignore_keys.push(column);
+        self
+    }
     pub fn condition<S: QueryObject>(mut self, data: S) -> Self {
         self.where_data = data.into_params();
         self
     }
 
     async fn query(self, db: &PostgresConn) -> Option<Vec<Row>> {
-        let (keys, mut values) = self.update.as_params();
+        let (keys, values) = self.update.as_params();
         let mut query = format!(
             "UPDATE {} SET {}",
             T::table_name(),
             (0..keys.len())
+                .filter(|x| !self.ignore_keys.contains(&keys[*x]))
                 .map(|x| format!("{} = ${}", keys[x], x + 1))
                 .collect::<Vec<String>>()
                 .join(",")
         );
         let mut variables: Vec<&(dyn ToSql + Sync)> = Vec::new();
-        variables.append(&mut values);
+
+        let mut updates = (0..keys.len()).filter(|x| !self.ignore_keys.contains(&keys[*x])).map(|x| values[x]).collect::<Vec<_>>();
+        variables.append(&mut updates);
         let (where_query, mut where_vars) = self.where_data.to_where(variables.len());
         query += &where_query;
         variables.append(&mut where_vars);
@@ -312,7 +323,7 @@ impl ToWhereClause for HashMap<&'static str, WhereClauseData> {
         let mut arg_idx: usize = 1 + arg_offset;
         for (column, data) in self.iter() {
             query.push_str(&data.comparison.as_expression(column, arg_idx));
-            if arg_idx != self.len() {
+            if arg_idx - arg_offset != self.len() {
                 query.push_str(" AND ")
             }
             variables.push(data.data.as_ref());

@@ -1,17 +1,18 @@
 use models::{NewUser, RouteData};
 use tusk_rs::{
-    DatabaseConfig, PostgresConn, Request, Response, RouteError,
+    DatabaseConfig, PostgresConn, Request, Response, RouteError, UrlEncoded,
 };
 use tusk_rs_derive::{route, treatment};
 mod models;
 mod util;
 
-#[route(Get /)]
+#[route(Post /)]
 pub async fn get_users(
-    _req: Request,
+    req: Request,
     db: PostgresConn,
     _data: RouteData,
 ) -> Result<Response, RouteError> {
+    let _data = UrlEncoded::from_string(String::from_utf8(req.body.as_bytes()).unwrap());
     let users = NewUser::all_users(&db).await;
     Ok(Response::json(&users))
 }

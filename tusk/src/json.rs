@@ -391,7 +391,9 @@ impl<T: ToJson> ToJson for Vec<T> {
             output += &i.to_json();
             output += ",";
         }
-        output.pop();
+        if !self.is_empty() {
+            output.pop();
+        }
         output += "]";
         output
     }

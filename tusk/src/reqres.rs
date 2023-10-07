@@ -1,4 +1,6 @@
 use chrono::{Utc, Datelike, Timelike};
+use crate::UrlEncoded;
+
 use super::{JsonArray, JsonObject, ToJson};
 use std::{collections::{HashMap, BTreeMap}, fmt::{Display, Formatter}, matches};
 
@@ -140,6 +142,7 @@ impl Response {
     pub fn apply_cors(&mut self, origin: &String, headers: &String) {
         self.headers.insert("Access-Control-Allow-Origin".to_string(), origin.to_string());
         self.headers.insert("Access-Control-Allow-Headers".to_string(), headers.to_string());
+        self.headers.insert("Access-Control-Allow-Methods".to_string(), "POST, PATCH, GET, OPTIONS, DELETE".to_string());
     }
 
     /// Convert the body of the request into bytes, consuming
@@ -391,12 +394,14 @@ pub enum BodyContents {
     Binary(Vec<u8>),
     JsonObject(JsonObject),
     JsonArray(JsonArray),
+    UrlEncoded(UrlEncoded),
     PlainText(String),
     None,
 }
 impl BodyContents {
     const TYPE_JSON: &str = "application/json";
     const TYPE_OCTET_STREAM: &str = "application/octet-stream";
+    const TYPE_URL_ENCODED: &str = "application/x-www-form-urlencoded";
     const TYPE_LD_JSON: &str = "application/ld+json";
     const TYPE_PLAIN_TEXT: &str = "text/plain";
 
@@ -413,6 +418,9 @@ impl BodyContents {
             }
             BodyContents::TYPE_PLAIN_TEXT => {
                 BodyContents::PlainText(String::from_utf8(data).unwrap())
+            }
+            BodyContents::TYPE_URL_ENCODED => {
+                BodyContents::UrlEncoded(UrlEncoded::from_string(String::from_utf8(data).unwrap()))
             }
             _ => BodyContents::Binary(data),
         }
@@ -436,6 +444,19 @@ impl BodyContents {
             _ => Err(RouteError::bad_request("Expected JSON array.")),
         }
     }
+    pub fn url_encoded(&self) -> Result<&UrlEncoded, RouteError> {
+        match self {
+            BodyContents::UrlEncoded(j) => Ok(j),
+            _ => Err(RouteError::bad_request("Expected URL encoded data.")),
+        }
+    }
+    pub fn as_url_encoded(self) -> UrlEncoded {
+        match self {
+            BodyContents::UrlEncoded(j) => j,
+            _ => UrlEncoded::from_string("".to_string()),
+        }
+    }
+
     pub fn as_json_array(self) -> JsonArray {
         match self {
             BodyContents::JsonArray(j) => j,
