@@ -330,7 +330,7 @@ impl ToJson for String {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += self;
+        o += &self.replace('"', "\\\"");
         o += "\"";
         o
     }
@@ -339,7 +339,7 @@ impl ToJson for str {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += self;
+        o += &self.replace('"', "\\\"");
         o += "\"";
         o
     }
@@ -392,7 +392,7 @@ impl<T: ToJson> ToJson for Vec<T> {
             output += ",";
         }
         if !self.is_empty() {
-            output = output[0..output.chars().count() - 1].to_string();
+            output.pop();
         }
         output += "]";
         output
@@ -406,18 +406,18 @@ impl<T: ToJson> ToJson for Option<T> {
         }
     }
 }
-impl<K: AsRef<str>, V: ToJson> ToJson for HashMap<K, V> {
+impl<K: ToJson, V: ToJson> ToJson for HashMap<K, V> {
     fn to_json(&self) -> String {
         let mut output = String::new();
         output += "{";
         for (k, v) in self {
             output += "\"";
-            output += k.as_ref();
+            output += &k.to_json();
             output += "\":";
             output += &v.to_json();
             output += ",";
         }
-        output = output[0..output.len() - 1].to_string();
+        output.pop();
         output += "}";
         output
     }
