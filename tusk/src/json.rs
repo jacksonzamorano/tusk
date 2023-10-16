@@ -485,7 +485,7 @@ impl JsonRetrieve for JsonArray {
 impl JsonRetrieve for DateTime<Utc> {
     fn parse(value: Option<&String>) -> Option<Self> {
         Some(
-            DateTime::parse_from_rfc3339(&value?.replace("\"", ""))
+            DateTime::parse_from_rfc3339(&value?.replace('\"', ""))
                 .ok()?
                 .with_timezone(&Utc),
         )
