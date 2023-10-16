@@ -448,6 +448,15 @@ impl JsonRetrieve for f64 {
         value?.parse().ok()
     }
 }
+impl JsonRetrieve for bool {
+    fn parse(value: Option<&String>) -> Option<Self> {
+        match value?.as_ref() {
+            "true" => Some(true),
+            "false" => Some(false),
+            _ => None
+        }
+    }
+}
 impl<T: JsonRetrieve> JsonRetrieve for Vec<T> {
     fn parse(value: Option<&String>) -> Option<Self> {
         Some(JsonArray::from_string(value?.clone()).map())
@@ -476,7 +485,7 @@ impl JsonRetrieve for JsonArray {
 impl JsonRetrieve for DateTime<Utc> {
     fn parse(value: Option<&String>) -> Option<Self> {
         Some(
-            DateTime::parse_from_rfc3339(value?)
+            DateTime::parse_from_rfc3339(&value?.replace("\"", ""))
                 .ok()?
                 .with_timezone(&Utc),
         )
