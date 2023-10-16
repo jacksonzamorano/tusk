@@ -3,12 +3,12 @@ use std::{
     marker::PhantomData,
 };
 
-use tokio_postgres::{types::ToSql, Row};
+use tokio_postgres::{error::SqlState, types::ToSql, Row};
 
-use crate::PostgresConn;
+use crate::{PostgresConn, RouteError};
 
 pub trait FromSql {
-    fn from_postgres(row: &Row) -> Self;
+    fn from_postgres(row: &Row) -> Result<Self, QueryError> where Self: Sized;
 }
 
 pub trait TableType {
@@ -104,6 +104,37 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     }
 }
 
+#[derive(Debug)]
+pub enum QueryError {
+    InsertIntoGenerated,
+    InvalidColumn(String),
+    NoResults,
+    Other,
+}
+impl From<tokio_postgres::Error> for QueryError {
+    fn from(value: tokio_postgres::Error) -> Self {
+        if let Some(db_error) = value.as_db_error() {
+            return match *db_error.code() {
+                SqlState::UNDEFINED_COLUMN => Self::InvalidColumn(
+                    db_error.message().split('\"').collect::<Vec<&str>>()[1].to_string(),
+                ),
+                _ => QueryError::Other
+            };
+        }
+        QueryError::Other
+    }
+}
+impl From<QueryError> for RouteError {
+    fn from(value: QueryError) -> Self {
+        match value {
+            QueryError::InsertIntoGenerated => RouteError::server_error("Cannot insert into generated column."),
+            QueryError::InvalidColumn(name) => RouteError::server_error(&format!("Column {} does not exist.", name)),
+            QueryError::NoResults => RouteError::not_found("No results found."),
+            QueryError::Other => RouteError::server_error("Database error.")
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct SelectQuery {
     where_data: HashMap<&'static str, WhereClauseData>,
@@ -152,16 +183,17 @@ impl SelectQuery {
         ))
     }
 
-    async fn query<T: TableType>(self, db: &PostgresConn, explain: bool) -> Option<Vec<Row>> {
+    async fn query<T: TableType>(self, db: &PostgresConn, explain: bool) -> Result<Vec<Row>, QueryError> {
         let mut query = format!(
             "{}SELECT {} FROM {} as MAIN {}",
-            if !explain { "" } else { "EXPLAIN "},
+            if !explain { "" } else { "EXPLAIN " },
             if self.ignore_keys.is_empty() {
                 T::cols().join(",")
             } else {
                 T::cols()
                     .iter()
-                    .filter(|x| !self.ignore_keys.contains(x)).copied()
+                    .filter(|x| !self.ignore_keys.contains(x))
+                    .copied()
                     .collect::<Vec<_>>()
                     .join(",")
             },
@@ -176,37 +208,36 @@ impl SelectQuery {
             query += " "
         };
         query += &self.clauses.into_values().collect::<Vec<_>>().join(" ");
-        // dbg!(&query);
-        // dbg!(variables.as_slice());
-        db.query(&query, variables.as_slice()).await.ok()
+        db.query(&query, variables.as_slice()).await.map_err(|x| x.into())
     }
 
-    pub async fn query_all<T: TableType + FromSql>(self, db: &PostgresConn) -> Option<Vec<T>> {
-        Some(
+    pub async fn query_all<T: TableType + FromSql>(self, db: &PostgresConn) -> Result<Vec<T>, QueryError> {
+        Ok(
             self.query::<T>(db, false)
                 .await?
                 .iter()
-                .map(|x| T::from_postgres(x))
+                .flat_map(|x| T::from_postgres(x))
                 .collect(),
         )
     }
 
-    pub async fn explain<T: TableType + FromSql>(self, db: &PostgresConn) -> Option<Vec<String>> {
-        Some(
+    pub async fn explain<T: TableType + FromSql>(self, db: &PostgresConn) -> Result<Vec<String>, QueryError> {
+        Ok(
             self.query::<T>(db, true)
                 .await?
                 .iter()
                 .map(|x| x.get(0))
-                .collect::<Vec<String>>()
+                .collect::<Vec<String>>(),
         )
     }
 
-    pub async fn query_one<T: TableType + FromSql>(self, db: &PostgresConn) -> Option<T> {
+    pub async fn query_one<T: TableType + FromSql>(self, db: &PostgresConn) -> Result<T, QueryError> {
         self.query::<T>(db, false)
             .await?
             .iter()
-            .map(|x| T::from_postgres(x))
+            .flat_map(|x| T::from_postgres(x))
             .next()
+            .ok_or(QueryError::NoResults)
     }
 }
 
@@ -233,7 +264,7 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
         self
     }
 
-    async fn query(self, db: &PostgresConn) -> Option<Vec<Row>> {
+    async fn query(self, db: &PostgresConn) -> Result<Vec<Row>, QueryError> {
         let (keys, values) = self.update.as_params();
         let mut query = format!(
             "UPDATE {} SET {}",
@@ -246,31 +277,35 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
         );
         let mut variables: Vec<&(dyn ToSql + Sync)> = Vec::new();
 
-        let mut updates = (0..keys.len()).filter(|x| !self.ignore_keys.contains(&keys[*x])).map(|x| values[x]).collect::<Vec<_>>();
+        let mut updates = (0..keys.len())
+            .filter(|x| !self.ignore_keys.contains(&keys[*x]))
+            .map(|x| values[x])
+            .collect::<Vec<_>>();
         variables.append(&mut updates);
         let (where_query, mut where_vars) = self.where_data.to_where(variables.len());
         query += &where_query;
         variables.append(&mut where_vars);
         query += " RETURNING *";
-        db.query(&query, variables.as_slice()).await.ok()
+        db.query(&query, variables.as_slice()).await.map_err(|x| x.into())
     }
 
-    pub async fn query_all(self, db: &PostgresConn) -> Option<Vec<T>> {
-        Some(
+    pub async fn query_all(self, db: &PostgresConn) -> Result<Vec<T>, QueryError> {
+        Ok(
             self.query(db)
                 .await?
                 .iter()
-                .map(|x| T::from_postgres(x))
+                .flat_map(|x| T::from_postgres(x))
                 .collect(),
         )
     }
 
-    pub async fn query_one(self, db: &PostgresConn) -> Option<T> {
+    pub async fn query_one(self, db: &PostgresConn) -> Result<T, QueryError> {
         self.query(db)
             .await?
             .iter()
-            .map(|x| T::from_postgres(x))
+            .flat_map(|x| T::from_postgres(x))
             .next()
+            .ok_or(QueryError::NoResults)
     }
 }
 

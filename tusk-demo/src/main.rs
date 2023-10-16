@@ -1,20 +1,27 @@
-use models::{NewUser, RouteData};
+use models::{RouteData};
 use tusk_rs::{
-    DatabaseConfig, PostgresConn, Request, Response, RouteError, UrlEncoded,
+    DatabaseConfig, PostgresConn, Request, Response, RouteError, SelectQuery,
 };
-use tusk_rs_derive::{route, treatment};
+use tusk_rs_derive::{route, treatment, autoquery, ToJson};
 mod models;
 mod util;
 
+#[autoquery]
+#[derive(Debug, ToJson)]
+pub struct User {
+    email: String
+}
+
 #[route(Post /)]
-pub async fn get_users(
-    req: Request,
+pub async fn echo(
+    _req: Request,
     db: PostgresConn,
     _data: RouteData,
 ) -> Result<Response, RouteError> {
-    let _data = UrlEncoded::from_string(String::from_utf8(req.body.as_bytes()).unwrap());
-    let users = NewUser::all_users(&db).await;
-    Ok(Response::json(&users))
+    let users = SelectQuery::new()
+        .query_all::<User>(&db)
+        .await;
+    Ok(Response::json(&users?))
 }
 
 #[treatment]
@@ -26,7 +33,7 @@ pub async fn treat_user_data(_req: Request, db: PostgresConn) -> RouteData {
 async fn main() {
     let config = DatabaseConfig::new();
     let mut server = tusk_rs::Server::new(9000, config, treat_user_data()).await;
-    server.register(get_users());
+    server.register(echo());
     server.set_cors(
         "*",
         "Origin, X-Requested-With, Content-Type, Accept, Authorization",

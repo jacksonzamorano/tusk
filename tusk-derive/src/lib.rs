@@ -37,16 +37,16 @@ pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
             }
         } else {
             quote! {
-                #x_name_ident: row.get(#x_name_str)
+                #x_name_ident: row.try_get(#x_name_str).map_err(|x| tusk_rs::QueryError::from(x))?
             }
         }
     });
 
     let constructor = quote! {
-        fn from_postgres(row: &tusk_rs::Row) -> #provided_struct_name {
-            #provided_struct_name {
+        fn from_postgres(row: &tusk_rs::Row) -> Result<#provided_struct_name, tusk_rs::QueryError> {
+            Ok(#provided_struct_name {
                 #(#field_create),*
-            }
+            })
         }
     };
 

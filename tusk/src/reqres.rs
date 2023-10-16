@@ -169,6 +169,7 @@ impl Default for Response {
 /// code: HTTP CODE,
 /// message: "your_message"
 /// }`
+#[derive(Debug)]
 pub struct RouteError {
     pub message: String,
     pub status_code: ResponseStatusCode,
@@ -248,7 +249,7 @@ impl RouteError {
 
 /// Struct which strongly types HTTP status code names
 /// to their corresponding codes.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ResponseStatusCode {
     Ok,
     Created,

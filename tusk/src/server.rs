@@ -112,19 +112,22 @@ impl<T: 'static> Server<T> {
                     request: req_parsed,
                     stream: req_stream,
                 };
-                let db_inst = self.database.get_connection().await.unwrap();
                 let mut bytes = Vec::new();
-                let mut response = match (self.treatment)(req.request, db_inst).await {
-                    Ok((treat, req, obj)) => {
-                        let mut body = matched_path(req, obj, treat)
-                            .await
-                            .unwrap_or_else(|x| x.to_response());
-                        if self.postfix.is_some() {
-                            body = self.postfix.unwrap()(body)
+                let mut response = if let Some(db_inst) = self.database.get_connection().await {
+                    match (self.treatment)(req.request, db_inst).await {
+                        Ok((treat, req, obj)) => {
+                            let mut body = matched_path(req, obj, treat)
+                                .await
+                                .unwrap_or_else(|x| x.to_response());
+                            if self.postfix.is_some() {
+                                body = self.postfix.unwrap()(body)
+                            }
+                            body
                         }
-                        body
+                        Err(error) => error.to_response(),
                     }
-                    Err(error) => error.to_response(),
+                } else {
+                    RouteError::server_error("Cannot connect to database.").to_response()
                 };
                 response.apply_cors(&self.cors_origin, &self.cors_headers);
                 bytes.append(&mut response.get_header_data());

@@ -58,12 +58,12 @@ pub fn create_insert_fn(
     );
 
     quote! {
-        pub async fn insert(&self, db: &tusk_rs::PostgresConn) -> #name {
+        pub async fn insert(&self, db: &tusk_rs::PostgresConn) -> Result<#name, tusk_rs::QueryError> {
             <#name as tusk_rs::FromSql>::from_postgres(db.query(#insert_query, &[#(#pg_params),*])
                 .await
-                .unwrap()
+                .map_err(|x| tusk_rs::QueryError::from(x))?
                 .first()
-                .unwrap())
+                .ok_or_else(|| tusk_rs::QueryError::NoResults)?)
         }
     }
 }
@@ -111,10 +111,12 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
         .iter()
         .map(|x| {
             let x_ident_string = x.ident.as_ref().unwrap().to_string();
-            let mut iter = x_ident_string.chars();
             let ident_name = format_ident!(
                 "{}",
-                iter.next().unwrap().to_uppercase().to_string() + iter.as_str()
+                x_ident_string.split('_').map(|d| {
+                    let mut d_chars = d.chars();
+                    d_chars.next().unwrap().to_uppercase().to_string() + d_chars.as_str()
+                }).collect::<Vec<String>>().join("")
             );
             quote! {
                 #ident_name

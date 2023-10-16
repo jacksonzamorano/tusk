@@ -1,6 +1,6 @@
-use std::{collections::HashMap};
-use chrono::{DateTime, Utc};
 use super::RouteError;
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 /// A JSON structure that is formatted
 /// like the following:
@@ -10,7 +10,7 @@ use super::RouteError;
 /// }
 #[derive(Debug)]
 pub struct JsonObject {
-    keys: HashMap<String, JsonChild>,
+    keys: HashMap<String, String>,
 }
 
 impl JsonObject {
@@ -21,10 +21,10 @@ impl JsonObject {
     ///
     /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonObject {
-        let mut keys: HashMap<String, JsonChild> = HashMap::new();
+        let mut keys: HashMap<String, String> = HashMap::new();
 
         let mut current_key = String::new();
-        let mut current_subkey = JsonChild::new();
+        let mut current_value = String::new();
 
         let mut enumerator = json.chars();
 
@@ -47,72 +47,57 @@ impl JsonObject {
                     value_start = enumerator.next().unwrap();
                 }
 
-                current_subkey.content_type = JsonType::type_for_delimiter(value_start);
-
-                // Read value
-                if current_subkey.content_type == JsonType::String {
-                    let mut last_value = '0';
-                    for inner_value in enumerator.by_ref() {
-                        if inner_value != '"' {
-                            current_subkey.contents.push(inner_value)
-                        } else if last_value == '\\' && (inner_value == '"' || inner_value == '\\')
-                        {
-                            current_subkey.contents.pop();
-                            current_subkey.contents.push(inner_value)
-                        } else {
-                            break;
-                        }
-                        last_value = inner_value;
-                    }
-                } else if current_subkey.content_type.is_primitive() {
-                    // We need to add the first index to the value.
-                    // Because the other types have delimeters (", {, [)
-                    // but primitives do not.
-                    current_subkey.contents.push(value_start);
-                    for inner_value in enumerator.by_ref() {
-                        if inner_value != ',' && inner_value != '}' {
-                            current_subkey.contents.push(inner_value)
-                        } else {
-                            break;
-                        }
-                    }
-                } else if current_subkey.content_type == JsonType::Object {
-                    let mut delimiter_stack_count = 1;
-                    current_subkey.contents.push('{');
-                    for inner_value in enumerator.by_ref() {
-                        current_subkey.contents.push(inner_value);
-                        if inner_value == '{' {
-                            delimiter_stack_count += 1;
-                        }
-                        if inner_value == '}' {
-                            delimiter_stack_count -= 1;
-                            if delimiter_stack_count == 0 {
-                                // Remove the trailing }
-                                current_subkey.contents.pop();
+                if let Some(t) = JsonType::type_for_delimiter(value_start) {
+                    // Read value
+                    if t == JsonType::Primitive {
+                        // We need to add the first index to the value.
+                        // Because the other types have delimeters (", {, [)
+                        // but primitives do not.
+                        current_value.push(value_start);
+                        for inner_value in enumerator.by_ref() {
+                            if inner_value != ',' && inner_value != '}' {
+                                current_value.push(inner_value)
+                            } else {
                                 break;
                             }
                         }
-                    }
-                } else if current_subkey.content_type == JsonType::Array {
-                    let mut delimiter_stack_count = 1;
-                    current_subkey.contents.push('[');
-                    for inner_value in enumerator.by_ref() {
-                        current_subkey.contents.push(inner_value);
-                        if inner_value == '[' {
-                            delimiter_stack_count += 1;
+                    } else if t == JsonType::Object {
+                        let mut delimiter_stack_count = 1;
+                        current_value.push('{');
+                        for inner_value in enumerator.by_ref() {
+                            current_value.push(inner_value);
+                            if inner_value == '{' {
+                                delimiter_stack_count += 1;
+                            }
+                            if inner_value == '}' {
+                                delimiter_stack_count -= 1;
+                                if delimiter_stack_count == 0 {
+                                    // Remove the trailing }
+                                    // current_value.pop();
+                                    break;
+                                }
+                            }
                         }
-                        if inner_value == ']' {
-                            delimiter_stack_count -= 1;
-                            if delimiter_stack_count == 0 {
-                                break;
+                    } else if t == JsonType::Array {
+                        let mut delimiter_stack_count = 1;
+                        current_value.push('[');
+                        for inner_value in enumerator.by_ref() {
+                            current_value.push(inner_value);
+                            if inner_value == '[' {
+                                delimiter_stack_count += 1;
+                            }
+                            if inner_value == ']' {
+                                delimiter_stack_count -= 1;
+                                if delimiter_stack_count == 0 {
+                                    break;
+                                }
                             }
                         }
                     }
+                    keys.insert(current_key, current_value);
                 }
-                keys.insert(current_key, current_subkey);
-
                 current_key = String::new();
-                current_subkey = JsonChild::new();
+                current_value = String::new();
             }
         }
         JsonObject { keys }
@@ -126,6 +111,16 @@ impl JsonObject {
     /// * `key` — The key to retrieve from.
     pub fn get<T: JsonRetrieve>(&self, key: &str) -> Option<T> {
         T::parse(self.keys.get(key))
+    }
+
+    /// Return a key of the JSON object as a type which
+    /// implements JsonRetrieve.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` — The key to retrieve from.
+    pub fn set<T: ToJson>(&mut self, key: &str, data: T) {
+        self.keys.insert(key.to_string(), data.to_json());
     }
 
     /// A convienience function that calls the `get` method
@@ -143,7 +138,7 @@ impl JsonObject {
 }
 #[derive(Debug)]
 pub struct JsonArray {
-    values: Vec<JsonChild>,
+    values: Vec<String>,
 }
 impl JsonArray {
     /// Builds a JSONArray from a string
@@ -154,11 +149,11 @@ impl JsonArray {
     ///
     /// * `json` — An owned string containing the JSON.
     pub fn from_string(json: String) -> JsonArray {
-        let mut values: Vec<JsonChild> = Vec::new();
+        let mut values: Vec<String> = Vec::new();
         let json = json[1..json.chars().count()].to_string();
 
         let mut enumerator = json.chars().peekable();
-        let mut current_value = JsonChild::new();
+        let mut current_value = String::new();
 
         while enumerator.peek().is_some() {
             let mut value_start = ' ';
@@ -169,78 +164,65 @@ impl JsonArray {
                     break;
                 }
             }
-            current_value.content_type = JsonType::type_for_delimiter(value_start);
-            // Read value
-            if current_value.content_type == JsonType::String {
-                let mut last_value = '0';
-                for inner_value in enumerator.by_ref() {
-                    if inner_value != '"' {
-                        current_value.contents.push(inner_value)
-                    } else if last_value == '\\' && (inner_value == '"' || inner_value == '\\') {
-                        current_value.contents.pop();
-                        current_value.contents.push(inner_value)
-                    } else {
-                        break;
-                    }
-                    last_value = inner_value;
-                }
-            } else if current_value.content_type.is_primitive() {
-                // We need to add the first index to the value.
-                // Because the other types have delimeters (", {, [)
-                // but primitives do not.
-                current_value.contents.push(value_start);
-                for inner_value in enumerator.by_ref() {
-                    if inner_value != ',' {
-                        current_value.contents.push(inner_value)
-                    } else {
-                        break;
-                    }
-                }
-            } else if current_value.content_type == JsonType::Object {
-                let mut delimiter_stack_count = 1;
-                current_value.contents.push('{');
-                for inner_value in enumerator.by_ref() {
-                    current_value.contents.push(inner_value);
-                    if inner_value == '{' {
-                        delimiter_stack_count += 1;
-                    }
-                    if inner_value == '}' {
-                        delimiter_stack_count -= 1;
-                        if delimiter_stack_count == 0 {
-                            // Remove the trailing }
-                            current_value.contents.pop();
+            if let Some(current_type) = JsonType::type_for_delimiter(value_start) {
+                // Read value
+                if current_type == JsonType::Primitive {
+                    // We need to add the first index to the value.
+                    // Because the other types have delimeters (", {, [)
+                    // but primitives do not.
+                    current_value.push(value_start);
+                    for inner_value in enumerator.by_ref() {
+                        if inner_value != ',' {
+                            current_value.push(inner_value)
+                        } else {
                             break;
                         }
                     }
-                }
-            } else if current_value.content_type == JsonType::Array {
-                let mut delimiter_stack_count = 1;
-                current_value.contents.push('[');
-                for inner_value in enumerator.by_ref() {
-                    current_value.contents.push(inner_value);
-                    if inner_value == '[' {
-                        delimiter_stack_count += 1;
+                } else if current_type == JsonType::Object {
+                    let mut delimiter_stack_count = 1;
+                    current_value.push('{');
+                    for inner_value in enumerator.by_ref() {
+                        current_value.push(inner_value);
+                        if inner_value == '{' {
+                            delimiter_stack_count += 1;
+                        }
+                        if inner_value == '}' {
+                            delimiter_stack_count -= 1;
+                            if delimiter_stack_count == 0 {
+                                // Remove the trailing }
+                                break;
+                            }
+                        }
                     }
-                    if inner_value == ']' {
-                        delimiter_stack_count -= 1;
-                        if delimiter_stack_count == 0 {
-                            break;
+                } else if current_type == JsonType::Array {
+                    let mut delimiter_stack_count = 1;
+                    current_value.push('[');
+                    for inner_value in enumerator.by_ref() {
+                        current_value.push(inner_value);
+                        if inner_value == '[' {
+                            delimiter_stack_count += 1;
+                        }
+                        if inner_value == ']' {
+                            delimiter_stack_count -= 1;
+                            if delimiter_stack_count == 0 {
+                                break;
+                            }
                         }
                     }
                 }
-            }
-            // Because the primitive types do not have a ending delimiter
-            // and read straight to the comma, we do not search until a comma
-            // if our type is primitive.
-            if !current_value.content_type.is_primitive() {
-                for value_skipper in enumerator.by_ref() {
-                    if value_skipper == ',' {
-                        break;
+                // Because the primitive types do not have a ending delimiter
+                // and read straight to the comma, we do not search until a comma
+                // if our type is primitive.
+                if current_type != JsonType::Primitive {
+                    for value_skipper in enumerator.by_ref() {
+                        if value_skipper == ',' {
+                            break;
+                        }
                     }
                 }
             }
             values.push(current_value);
-            current_value = JsonChild::new();
+            current_value = String::new();
         }
 
         JsonArray { values }
@@ -260,55 +242,28 @@ impl JsonArray {
     /// to a type that implements JsonRetrieve.
     /// Drops any types that are not parsed properly.
     pub fn map<T: JsonRetrieve>(&self) -> Vec<T> {
-        self.values.iter().filter_map(|x| T::parse(Some(x))).collect()
-    }
-}
-
-/// A type used to internally represet JSON.
-/// Only used publicly to implement `JsonRetrieve`.
-#[derive(Debug)]
-pub struct JsonChild {
-    content_type: JsonType,
-    contents: String,
-}
-impl JsonChild {
-    fn new() -> JsonChild {
-        JsonChild {
-            content_type: JsonType::String,
-            contents: String::new(),
-        }
+        self.values
+            .iter()
+            .filter_map(|x| T::parse(Some(x)))
+            .collect()
     }
 }
 
 #[derive(Debug, PartialEq)]
 enum JsonType {
-    String,
-    Number,
-    Boolean,
+    Primitive,
     Object,
     Array,
-    Null,
 }
 
 impl JsonType {
-    pub fn is_primitive(&self) -> bool {
-        *self == JsonType::Number || *self == JsonType::Boolean || *self == JsonType::Null
-    }
-    pub fn type_for_delimiter(dlm: char) -> JsonType {
-        if dlm.is_ascii_digit() {
-            JsonType::Number
-        } else if dlm == '"' {
-            JsonType::String
-        } else if dlm == 'f' || dlm == 't' {
-            JsonType::Boolean
-        } else if dlm == '[' {
-            JsonType::Array
+    pub fn type_for_delimiter(dlm: char) -> Option<JsonType> {
+        if dlm == '[' {
+            Some(JsonType::Array)
         } else if dlm == '{' {
-            JsonType::Object
-        } else if dlm == 'n' {
-            JsonType::Null
+            Some(JsonType::Object)
         } else {
-            panic!("Unexpected value {}", dlm);
+            Some(JsonType::Primitive)
         }
     }
 }
@@ -322,15 +277,19 @@ pub trait ToJson {
 }
 
 pub trait FromJson {
-    fn from_json(json: &JsonObject) -> Option<Self> where Self: Sized;
-    fn from_json_validated(json: &JsonObject) -> Result<Self, RouteError> where Self: Sized;
+    fn from_json(json: &JsonObject) -> Option<Self>
+    where
+        Self: Sized;
+    fn from_json_validated(json: &JsonObject) -> Result<Self, RouteError>
+    where
+        Self: Sized;
 }
 
 impl ToJson for String {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += &self.replace('"', "\\\"");
+        o += &self.replace('"', "\\\"").replace('\n', "\\n");
         o += "\"";
         o
     }
@@ -339,7 +298,7 @@ impl ToJson for str {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += &self.replace('"', "\\\"");
+        o += &self.replace('"', "\\\"").replace('\n', "\\n");
         o += "\"";
         o
     }
@@ -427,76 +386,104 @@ impl ToJson for DateTime<Utc> {
         format!("\"{}\"", self.to_rfc3339())
     }
 }
+impl ToJson for JsonObject {
+    fn to_json(&self) -> String {
+        let mut output = "{".to_string();
+        for (k, v) in &self.keys {
+            output += "\"";
+            output += k;
+            output += "\":";
+            output += v;
+            output += ",";
+        }
+        output.pop();
+        output += "}";
+        output
+    }
+}
+impl ToJson for JsonArray {
+    fn to_json(&self) -> String {
+        let mut output = "[".to_string();
+        for v in &self.values {
+            output += v;
+            output += ",";
+        }
+        output.pop();
+        output += "]";
+        output
+    }
+}
 
 pub trait JsonRetrieve {
-    fn parse(value: Option<&JsonChild>) -> Option<Self>
+    fn parse(value: Option<&String>) -> Option<Self>
     where
         Self: Sized;
 }
 
 impl JsonRetrieve for String {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        Some(value?.contents.clone())
+    fn parse(value: Option<&String>) -> Option<Self> {
+        let mut v = value?.clone();
+        v.remove(0);
+        v.pop();
+        Some(v)
     }
 }
 impl JsonRetrieve for i32 {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        value?.contents.parse().ok()
+    fn parse(value: Option<&String>) -> Option<Self> {
+        value?.parse().ok()
     }
 }
 impl JsonRetrieve for i64 {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        value?.contents.parse().ok()
+    fn parse(value: Option<&String>) -> Option<Self> {
+        value?.parse().ok()
     }
 }
 impl JsonRetrieve for f32 {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        value?.contents.parse().ok()
+    fn parse(value: Option<&String>) -> Option<Self> {
+        value?.parse().ok()
     }
 }
 impl JsonRetrieve for f64 {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        value?.contents.parse().ok()
+    fn parse(value: Option<&String>) -> Option<Self> {
+        value?.parse().ok()
     }
 }
 impl<T: JsonRetrieve> JsonRetrieve for Vec<T> {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        Some(JsonArray::from_string(value?.contents.clone()).map())
+    fn parse(value: Option<&String>) -> Option<Self> {
+        Some(JsonArray::from_string(value?.clone()).map())
     }
 }
 impl<T: JsonRetrieve> JsonRetrieve for Option<T> {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
+    fn parse(value: Option<&String>) -> Option<Self> {
         if let Some(v) = value {
-            if v.content_type != JsonType::Null {
-                return Some(T::parse(value))
+            if v != "null" {
+                return Some(T::parse(value));
             }
         }
         Some(None)
     }
 }
 impl JsonRetrieve for JsonObject {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        if value?.content_type == JsonType::Object {
-            return Some(JsonObject::from_string(value?.contents.clone()));
-        }
-        None
+    fn parse(value: Option<&String>) -> Option<Self> {
+        Some(JsonObject::from_string(value?.clone()))
     }
 }
 impl JsonRetrieve for JsonArray {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        if value?.content_type == JsonType::Array {
-            return Some(JsonArray::from_string(value?.contents.clone()));
-        }
-        None
+    fn parse(value: Option<&String>) -> Option<Self> {
+        Some(JsonArray::from_string(value?.clone()))
     }
 }
 impl JsonRetrieve for DateTime<Utc> {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        Some(DateTime::parse_from_rfc3339(&value?.contents).ok()?.with_timezone(&Utc))
+    fn parse(value: Option<&String>) -> Option<Self> {
+        Some(
+            DateTime::parse_from_rfc3339(value?)
+                .ok()?
+                .with_timezone(&Utc),
+        )
     }
 }
 impl<T: FromJson> JsonRetrieve for T {
-    fn parse(value: Option<&JsonChild>) -> Option<Self> {
-        Self::from_json(&JsonObject::from_string(value?.contents.clone()))
+    fn parse(value: Option<&String>) -> Option<Self> {
+        Self::from_json(&JsonObject::from_string(value?.clone()))
     }
 }
