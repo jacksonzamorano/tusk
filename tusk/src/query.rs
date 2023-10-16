@@ -109,7 +109,7 @@ pub enum QueryError {
     InsertIntoGenerated,
     InvalidColumn(String),
     NoResults,
-    Other,
+    Other(tokio_postgres::Error),
 }
 impl From<tokio_postgres::Error> for QueryError {
     fn from(value: tokio_postgres::Error) -> Self {
@@ -118,10 +118,10 @@ impl From<tokio_postgres::Error> for QueryError {
                 SqlState::UNDEFINED_COLUMN => Self::InvalidColumn(
                     db_error.message().split('\"').collect::<Vec<&str>>()[1].to_string(),
                 ),
-                _ => QueryError::Other
+                _ => QueryError::Other(value)
             };
         }
-        QueryError::Other
+        QueryError::Other(value)
     }
 }
 impl From<QueryError> for RouteError {
@@ -130,7 +130,10 @@ impl From<QueryError> for RouteError {
             QueryError::InsertIntoGenerated => RouteError::server_error("Cannot insert into generated column."),
             QueryError::InvalidColumn(name) => RouteError::server_error(&format!("Column {} does not exist.", name)),
             QueryError::NoResults => RouteError::not_found("No results found."),
-            QueryError::Other => RouteError::server_error("Database error.")
+            QueryError::Other(e) => {
+                dbg!(e);
+                RouteError::server_error("Database error.")
+            }
         }
     }
 }
