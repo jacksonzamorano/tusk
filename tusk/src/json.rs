@@ -54,11 +54,19 @@ impl JsonObject {
                         // Because the other types have delimeters (", {, [)
                         // but primitives do not.
                         current_value.push(value_start);
+                        let mut in_quote = value_start == '"';
                         for inner_value in enumerator.by_ref() {
-                            if inner_value != ',' && inner_value != '}' {
-                                current_value.push(inner_value)
-                            } else {
+                            if current_value.chars().last().unwrap_or('_') != '\\'
+                                && inner_value == '"'
+                            {
+                                in_quote = !in_quote;
+                            }
+                            if (inner_value == ',' || inner_value == '}' || inner_value == ']')
+                                && !in_quote
+                            {
                                 break;
+                            } else {
+                                current_value.push(inner_value);
                             }
                         }
                     } else if t == JsonType::Object {
@@ -289,7 +297,7 @@ impl ToJson for String {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += &self.replace('"', "\\\"").replace('\n', "\\n");
+        o += &self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
         o += "\"";
         o
     }
@@ -298,7 +306,7 @@ impl ToJson for str {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += &self.replace('"', "\\\"").replace('\n', "\\n");
+        o += &self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
         o += "\"";
         o
     }
@@ -453,7 +461,7 @@ impl JsonRetrieve for bool {
         match value?.as_ref() {
             "true" => Some(true),
             "false" => Some(false),
-            _ => None
+            _ => None,
         }
     }
 }
