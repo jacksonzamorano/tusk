@@ -8,7 +8,9 @@ use tokio_postgres::{error::SqlState, types::ToSql, Row};
 use crate::{PostgresConn, RouteError};
 
 pub trait FromSql {
-    fn from_postgres(row: &Row) -> Result<Self, QueryError> where Self: Sized;
+    fn from_postgres(row: &Row) -> Result<Self, QueryError>
+    where
+        Self: Sized;
 }
 
 pub trait TableType {
@@ -22,6 +24,7 @@ pub enum WhereType {
     In,
     LessThan,
     GreaterThan,
+    Null,
 }
 impl WhereType {
     fn as_expression(&self, column: &'static str, arg: usize) -> String {
@@ -31,18 +34,19 @@ impl WhereType {
             WhereType::In => format!("{} = any(${})", column, arg),
             WhereType::LessThan => format!("{} < ${}", column, arg),
             WhereType::GreaterThan => format!("{} > ${}", column, arg),
+            WhereType::Null => format!("{} IS NULL", column),
         }
     }
 }
 
 pub struct WhereClauseData {
-    pub data: Box<dyn ToSql + Sync>,
+    pub data: Option<Box<dyn ToSql + Sync>>,
     pub comparison: WhereType,
 }
 impl WhereClauseData {
     pub fn new<T: ToSql + Sync + 'static>(data: T, comparison: WhereType) -> WhereClauseData {
         WhereClauseData {
-            data: Box::new(data),
+            data: Some(Box::new(data)),
             comparison,
         }
     }
@@ -60,7 +64,7 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     pub fn eq(data: T) -> WhereClause<T> {
         WhereClause {
             d: WhereClauseData {
-                data: Box::new(data),
+                data: Some(Box::new(data)),
                 comparison: WhereType::Equals,
             },
             _marker: PhantomData,
@@ -69,7 +73,7 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     pub fn neq(data: T) -> WhereClause<T> {
         WhereClause {
             d: WhereClauseData {
-                data: Box::new(data),
+                data: Some(Box::new(data)),
                 comparison: WhereType::NotEquals,
             },
             _marker: PhantomData,
@@ -78,7 +82,7 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     pub fn in_vec(data: Vec<T>) -> WhereClause<T> {
         WhereClause {
             d: WhereClauseData {
-                data: Box::new(data),
+                data: Some(Box::new(data)),
                 comparison: WhereType::In,
             },
             _marker: PhantomData,
@@ -87,7 +91,7 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     pub fn lt(data: T) -> WhereClause<T> {
         WhereClause {
             d: WhereClauseData {
-                data: Box::new(data),
+                data: Some(Box::new(data)),
                 comparison: WhereType::LessThan,
             },
             _marker: PhantomData,
@@ -96,8 +100,17 @@ impl<T: ToSql + Sync + 'static> WhereClause<T> {
     pub fn gt(data: T) -> WhereClause<T> {
         WhereClause {
             d: WhereClauseData {
-                data: Box::new(data),
+                data: Some(Box::new(data)),
                 comparison: WhereType::GreaterThan,
+            },
+            _marker: PhantomData,
+        }
+    }
+    pub fn null() -> WhereClause<T> {
+        WhereClause {
+            d: WhereClauseData {
+                data: None,
+                comparison: WhereType::Null,
             },
             _marker: PhantomData,
         }
@@ -118,7 +131,7 @@ impl From<tokio_postgres::Error> for QueryError {
                 SqlState::UNDEFINED_COLUMN => Self::InvalidColumn(
                     db_error.message().split('\"').collect::<Vec<&str>>()[1].to_string(),
                 ),
-                _ => QueryError::Other(value)
+                _ => QueryError::Other(value),
             };
         }
         QueryError::Other(value)
@@ -127,8 +140,12 @@ impl From<tokio_postgres::Error> for QueryError {
 impl From<QueryError> for RouteError {
     fn from(value: QueryError) -> Self {
         match value {
-            QueryError::InsertIntoGenerated => RouteError::server_error("Cannot insert into generated column."),
-            QueryError::InvalidColumn(name) => RouteError::server_error(&format!("Column {} does not exist.", name)),
+            QueryError::InsertIntoGenerated => {
+                RouteError::server_error("Cannot insert into generated column.")
+            }
+            QueryError::InvalidColumn(name) => {
+                RouteError::server_error(&format!("Column {} does not exist.", name))
+            }
             QueryError::NoResults => RouteError::not_found("No results found."),
             QueryError::Other(e) => {
                 dbg!(e);
@@ -186,7 +203,11 @@ impl SelectQuery {
         ))
     }
 
-    async fn query<T: TableType>(self, db: &PostgresConn, explain: bool) -> Result<Vec<Row>, QueryError> {
+    async fn query<T: TableType>(
+        self,
+        db: &PostgresConn,
+        explain: bool,
+    ) -> Result<Vec<Row>, QueryError> {
         let mut query = format!(
             "{}SELECT {} FROM {} as MAIN {}",
             if !explain { "" } else { "EXPLAIN " },
@@ -211,30 +232,39 @@ impl SelectQuery {
             query += " "
         };
         query += &self.clauses.into_values().collect::<Vec<_>>().join(" ");
-        db.query(&query, variables.as_slice()).await.map_err(|x| x.into())
+        db.query(&query, variables.as_slice())
+            .await
+            .map_err(|x| x.into())
     }
 
-    pub async fn query_all<T: TableType + FromSql>(self, db: &PostgresConn) -> Result<Vec<T>, QueryError> {
-        Ok(
-            self.query::<T>(db, false)
-                .await?
-                .iter()
-                .flat_map(|x| T::from_postgres(x))
-                .collect(),
-        )
+    pub async fn query_all<T: TableType + FromSql>(
+        self,
+        db: &PostgresConn,
+    ) -> Result<Vec<T>, QueryError> {
+        Ok(self
+            .query::<T>(db, false)
+            .await?
+            .iter()
+            .flat_map(|x| T::from_postgres(x))
+            .collect())
     }
 
-    pub async fn explain<T: TableType + FromSql>(self, db: &PostgresConn) -> Result<Vec<String>, QueryError> {
-        Ok(
-            self.query::<T>(db, true)
-                .await?
-                .iter()
-                .map(|x| x.get(0))
-                .collect::<Vec<String>>(),
-        )
+    pub async fn explain<T: TableType + FromSql>(
+        self,
+        db: &PostgresConn,
+    ) -> Result<Vec<String>, QueryError> {
+        Ok(self
+            .query::<T>(db, true)
+            .await?
+            .iter()
+            .map(|x| x.get(0))
+            .collect::<Vec<String>>())
     }
 
-    pub async fn query_one<T: TableType + FromSql>(self, db: &PostgresConn) -> Result<T, QueryError> {
+    pub async fn query_one<T: TableType + FromSql>(
+        self,
+        db: &PostgresConn,
+    ) -> Result<T, QueryError> {
         self.query::<T>(db, false)
             .await?
             .iter()
@@ -289,17 +319,18 @@ impl<T: UpdatableObject + TableType + FromSql> UpdateQuery<T> {
         query += &where_query;
         variables.append(&mut where_vars);
         query += " RETURNING *";
-        db.query(&query, variables.as_slice()).await.map_err(|x| x.into())
+        db.query(&query, variables.as_slice())
+            .await
+            .map_err(|x| x.into())
     }
 
     pub async fn query_all(self, db: &PostgresConn) -> Result<Vec<T>, QueryError> {
-        Ok(
-            self.query(db)
-                .await?
-                .iter()
-                .flat_map(|x| T::from_postgres(x))
-                .collect(),
-        )
+        Ok(self
+            .query(db)
+            .await?
+            .iter()
+            .flat_map(|x| T::from_postgres(x))
+            .collect())
     }
 
     pub async fn query_one(self, db: &PostgresConn) -> Result<T, QueryError> {
@@ -359,14 +390,15 @@ impl ToWhereClause for HashMap<&'static str, WhereClauseData> {
             query += " WHERE "
         }
         let mut arg_idx: usize = 1 + arg_offset;
+        let mut q_args = Vec::<String>::new();
         for (column, data) in self.iter() {
-            query.push_str(&data.comparison.as_expression(column, arg_idx));
-            if arg_idx - arg_offset != self.len() {
-                query.push_str(" AND ")
+            q_args.push(data.comparison.as_expression(column, arg_idx));
+            if let Some(d) = &data.data {
+                variables.push(d.as_ref());
+                arg_idx += 1;
             }
-            variables.push(data.data.as_ref());
-            arg_idx += 1;
         }
+        query += &q_args.join(" AND ");
         (query, variables)
     }
 }
