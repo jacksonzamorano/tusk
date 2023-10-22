@@ -433,6 +433,7 @@ impl JsonRetrieve for String {
         let mut v = value?.clone();
         v.remove(0);
         v.pop();
+        v = v.replace("\\\"", "\"");
         Some(v)
     }
 }

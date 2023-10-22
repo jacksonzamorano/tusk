@@ -57,6 +57,25 @@ pub fn create_insert_fn(
             .join(",")
     );
 
+    let item_count = pg_field_names.len();
+
+    let insert_bulk_query_prefix = format!(
+        "INSERT INTO {} ({}) VALUES",
+        params.table_name,
+        pg_field_names.join(",")
+    );
+
+    let bulk_pg_params = fields
+        .iter()
+        .filter(|x| pg_field_names.contains(&x.ident.as_ref().unwrap().to_string()))
+        .map(|x| {
+            let x_name = &x.ident;
+            quote! {
+                d.push(&x.borrow().#x_name);
+            }
+        })
+        .collect::<Vec<_>>();
+
     quote! {
         pub async fn insert(&self, db: &tusk_rs::PostgresConn) -> Result<#name, tusk_rs::QueryError> {
             <#name as tusk_rs::FromSql>::from_postgres(db.query(#insert_query, &[#(#pg_params),*])
@@ -64,6 +83,27 @@ pub fn create_insert_fn(
                 .map_err(|x| tusk_rs::QueryError::from(x))?
                 .first()
                 .ok_or_else(|| tusk_rs::QueryError::NoResults)?)
+        }
+        pub async fn bulk_insert<T: std::borrow::Borrow<#name>>(items: &[T], db: &tusk_rs::PostgresConn) -> Result<Vec<#name>, tusk_rs::QueryError> {
+            let prefix = #insert_bulk_query_prefix;
+            let item_count = #item_count;
+            let insert_query_data = (0..items.len())
+                .map(|ix| format!("({})", 
+                    (1..=item_count).map(|itx| format!("${}", itx + ix*item_count)).collect::<Vec<String>>().join(",")
+                ))
+                .collect::<Vec<String>>().join(", ");
+            let insert_query = format!("{} {} RETURNING *", prefix, insert_query_data);
+            Ok(db.query(&insert_query, &items.iter().map(|x| {
+                let mut d = Vec::<&(dyn tusk_rs::ToSql + Sync)>::new();
+                #(#bulk_pg_params)*
+                d
+            }).flatten().collect::<Vec<_>>())
+                .await
+                .map_err(|x| tusk_rs::QueryError::from(x))?
+                .into_iter()
+                .map(|x| <#name as tusk_rs::FromSql>::from_postgres(&x))
+                .flatten()
+                .collect::<Vec<#name>>())
         }
     }
 }
@@ -113,10 +153,14 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
             let x_ident_string = x.ident.as_ref().unwrap().to_string();
             let ident_name = format_ident!(
                 "{}",
-                x_ident_string.split('_').map(|d| {
-                    let mut d_chars = d.chars();
-                    d_chars.next().unwrap().to_uppercase().to_string() + d_chars.as_str()
-                }).collect::<Vec<String>>().join("")
+                x_ident_string
+                    .split('_')
+                    .map(|d| {
+                        let mut d_chars = d.chars();
+                        d_chars.next().unwrap().to_uppercase().to_string() + d_chars.as_str()
+                    })
+                    .collect::<Vec<String>>()
+                    .join("")
             );
             quote! {
                 #ident_name
@@ -126,7 +170,11 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
 
     let cols = fields
         .iter()
-        .filter(|x| !params.ignore_keys.contains(&x.ident.as_ref().unwrap().to_string()))
+        .filter(|x| {
+            !params
+                .ignore_keys
+                .contains(&x.ident.as_ref().unwrap().to_string())
+        })
         .map(|x| {
             let col_name = x.ident.as_ref().unwrap().to_string();
             quote! {
@@ -136,7 +184,11 @@ pub fn extras(name: &Ident, fields: &Fields, params: &AutoqueryParams) -> proc_m
         .collect::<Vec<_>>();
     let data = fields
         .iter()
-        .filter(|x| !params.ignore_keys.contains(&x.ident.as_ref().unwrap().to_string()))
+        .filter(|x| {
+            !params
+                .ignore_keys
+                .contains(&x.ident.as_ref().unwrap().to_string())
+        })
         .map(|x| {
             let col_name_ident = &x.ident;
             quote! {
