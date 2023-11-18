@@ -21,6 +21,7 @@ pub struct Server<T> {
     postfix: Option<fn(Response) -> Response>,
     cors_origin: String,
     cors_headers: String,
+    debugging_enabled: bool
 }
 impl<T: 'static> Server<T> {
     /// Create a new server.
@@ -43,7 +44,15 @@ impl<T: 'static> Server<T> {
             cors_origin: "*".to_string(),
             cors_headers: "Origin, X-Requested-With, Content-Type, Accept, Authorization"
                 .to_string(),
+            debugging_enabled: false
         }
+    }
+    
+    pub fn enable_debugging(&mut self) {
+        self.debugging_enabled = true
+    }
+    pub fn disable_debugging(&mut self) {
+        self.debugging_enabled = false
     }
 
     /// Register a [`Route`]. Routes should NOT be registered
@@ -113,8 +122,8 @@ impl<T: 'static> Server<T> {
                     stream: req_stream,
                 };
                 let mut bytes = Vec::new();
-                let mut response = if let Some(db_inst) = self.database.get_connection().await {
-                    match (self.treatment)(req.request, db_inst).await {
+                let mut response = match self.database.get_connection().await {
+                    Ok(db_inst) => match (self.treatment)(req.request, db_inst).await {
                         Ok((treat, req, obj)) => {
                             let mut body = matched_path(req, obj, treat)
                                 .await
@@ -125,9 +134,13 @@ impl<T: 'static> Server<T> {
                             body
                         }
                         Err(error) => error.to_response(),
+                    },
+                    Err(err) => {
+                        if self.debugging_enabled {
+                            dbg!(err);
+                        }
+                        RouteError::server_error("Cannot connect to database.").to_response()
                     }
-                } else {
-                    RouteError::server_error("Cannot connect to database.").to_response()
                 };
                 response.apply_cors(&self.cors_origin, &self.cors_headers);
                 bytes.append(&mut response.get_header_data());

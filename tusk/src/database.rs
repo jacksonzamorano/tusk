@@ -34,8 +34,8 @@ impl Database {
     }
 
     /// Gets a connection within the pool.
-    pub async fn get_connection(&self) -> Option<Object> {
-        self.pool.get().await.ok()
+    pub async fn get_connection(&self) -> Result<Object, deadpool_postgres::PoolError> {
+        self.pool.get().await
     }
 }
 
