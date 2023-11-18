@@ -31,7 +31,7 @@ pub struct Response {
     pub headers: BTreeMap<String, String>,
 }
 impl Response {
-    const WEEKDAY_MAP: [&str;7] = [
+    const WEEKDAY_MAP: [&'static str;7] = [
         "Mon",
         "Tue",
         "Wed",
@@ -40,7 +40,7 @@ impl Response {
         "Sat",
         "Sun"
     ];
-    const MONTH_MAP: [&str;12] = [
+    const MONTH_MAP: [&'static str;12] = [
         "Jan",
         "Feb",
         "Mar",
@@ -400,11 +400,11 @@ pub enum BodyContents {
     None,
 }
 impl BodyContents {
-    const TYPE_JSON: &str = "application/json";
-    const TYPE_OCTET_STREAM: &str = "application/octet-stream";
-    const TYPE_URL_ENCODED: &str = "application/x-www-form-urlencoded";
-    const TYPE_LD_JSON: &str = "application/ld+json";
-    const TYPE_PLAIN_TEXT: &str = "text/plain";
+    const TYPE_JSON: &'static str = "application/json";
+    const TYPE_OCTET_STREAM: &'static str = "application/octet-stream";
+    const TYPE_URL_ENCODED: &'static str = "application/x-www-form-urlencoded";
+    const TYPE_LD_JSON: &'static str = "application/ld+json";
+    const TYPE_PLAIN_TEXT: &'static str = "text/plain";
 
     pub fn type_from_mime(mime: &str, data: Vec<u8>) -> BodyContents {
         match mime {
@@ -485,13 +485,13 @@ pub enum RequestType {
 }
 
 impl RequestType {
-    const GET_TYPE: &str = "GET";
-    const POST_TYPE: &str = "POST";
-    const PATCH_TYPE: &str = "PATCH";
-    const PUT_TYPE: &str = "PUT";
-    const DELETE_TYPE: &str = "DELETE";
-    const ANY_TYPE: &str = "ANY";
-    const OPTIONS_TYPE: &str = "OPTIONS";
+    const GET_TYPE: &'static str = "GET";
+    const POST_TYPE: &'static str = "POST";
+    const PATCH_TYPE: &'static str = "PATCH";
+    const PUT_TYPE: &'static str = "PUT";
+    const DELETE_TYPE: &'static str = "DELETE";
+    const ANY_TYPE: &'static str = "ANY";
+    const OPTIONS_TYPE: &'static str = "OPTIONS";
 
     pub fn type_for_method(method: &str) -> RequestType {
         match method {
