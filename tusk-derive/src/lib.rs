@@ -1,73 +1,9 @@
 #[macro_use]
 extern crate quote;
 extern crate proc_macro;
-mod autoquery;
-use crate::autoquery::AutoqueryParams;
 use proc_macro::TokenStream;
 use quote::{format_ident, ToTokens};
 use syn::{parse_macro_input, ItemFn, ItemStruct};
-
-#[proc_macro_attribute]
-pub fn autoquery(args: TokenStream, input: TokenStream) -> TokenStream {
-    let provided_struct = parse_macro_input!(input as ItemStruct);
-    let provided_struct_name = &provided_struct.ident;
-    let provided_table_name = format!("{}s", provided_struct_name.to_string().to_lowercase());
-
-    let mut params = AutoqueryParams::from_string(args.to_string());
-    if params.table_name.is_empty() { params.table_name = provided_table_name }
-
-    let fields = provided_struct
-        .fields
-        .iter()
-        .map(|x| { 
-            let is_option = match &x.ty {
-                syn::Type::Path(x) => x.path.segments.last().map(|x| x.ident.to_string()).unwrap_or(String::new()) == "Option",
-                _ => false
-            };
-            (x.ident.as_ref().unwrap().to_string(), is_option)
-        })
-        .collect::<Vec<_>>();
-
-    let field_create = fields.iter().map(|x| {
-        let x_name_ident = format_ident!("{}", x.0);
-        let x_name_str = &x.0;
-        if x.1 {
-            quote! {
-                #x_name_ident: row.try_get(#x_name_str).ok()
-            }
-        } else {
-            quote! {
-                #x_name_ident: row.try_get(#x_name_str).map_err(|x| tusk_rs::QueryError::from(x))?
-            }
-        }
-    });
-
-    let constructor = quote! {
-        fn from_postgres(row: &tusk_rs::Row) -> Result<#provided_struct_name, tusk_rs::QueryError> {
-            Ok(#provided_struct_name {
-                #(#field_create),*
-            })
-        }
-    };
-
-    let creator =
-        autoquery::create_insert_fn(provided_struct_name, &provided_struct.fields, &params);
-    let select = autoquery::select_query(provided_struct_name, &provided_struct.fields);
-    let extras = autoquery::extras(provided_struct_name, &provided_struct.fields, &params);
-
-    quote! {
-        #provided_struct
-        impl tusk_rs::FromSql for #provided_struct_name {
-            #constructor
-        }
-        impl #provided_struct_name {
-            #creator
-        }
-        #select
-        #extras
-    }
-    .into()
-}
 
 #[proc_macro_attribute]
 pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -155,7 +91,7 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
             .replace("RouteError", "")
             .replace('>', "")
             .replace("Request", "")
-            .replace("PostgresConn", "")
+            .replace("DatabaseConnection", "")
             .replace("tusk_rs::", "")
             .replace(['(', ')'], "")
             .trim()
@@ -180,10 +116,10 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
     quote! {
         use core::future::Future;
         use tokio::macros::support::Pin;
-        pub fn #data_name() -> Box<fn(Request, tusk_rs::PostgresConn) -> Pin<Box<dyn Future<Output = Result<(#o, Request, tusk_rs::PostgresConn), RouteError>>>>> {
+        pub fn #data_name() -> Box<fn(Request, tusk_rs::DatabaseConnection) -> Pin<Box<dyn Future<Output = Result<(#o, Request, tusk_rs::DatabaseConnection), RouteError>>>>> {
             Box::new(move |a,b| Box::pin(#data_name_int(a,b)))
         }
-        async fn #data_name_int(#inputs) -> Result<(#o, Request, tusk_rs::PostgresConn), RouteError> {
+        async fn #data_name_int(#inputs) -> Result<(#o, Request, tusk_rs::DatabaseConnection), RouteError> {
             let fn_eval = #data_block;
             return Ok((fn_eval, #(#mapped_inputs_outputs),*));
         }
@@ -193,7 +129,6 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ToJson)]
 pub fn derive_to_json(item: TokenStream) -> TokenStream {
     let struct_ident = parse_macro_input!(item as ItemStruct);
-
     let struct_name = struct_ident.ident;
     let struct_fields = struct_ident.fields.iter().map(|x| {
         let x_ident = &x.ident;
@@ -206,10 +141,15 @@ pub fn derive_to_json(item: TokenStream) -> TokenStream {
             output += ",";
         }
     });
-
+    let generics = struct_ident.generics;
+    let impl_types = generics.params.iter().map(|x| {
+        let d = format_ident!("{}", x.to_token_stream().to_string().split(':').next().unwrap().trim());
+        quote! {#d}
+    }).collect::<Vec<_>>();
+    let impl_insert = if impl_types.is_empty() { quote!{} } else {quote!{<#(#impl_types),*>}};
 
     let output_new = quote! {
-        impl tusk_rs::json::ToJson for #struct_name {
+        impl #generics tusk_rs::json::ToJson for #struct_name #impl_insert {
             fn to_json(&self) -> String {
                 let mut output = String::new();
                 output += "{";
@@ -257,6 +197,127 @@ pub fn derive_from_json(item: TokenStream) -> TokenStream {
                 Ok(#struct_name {
                     #(#fields_validate_get),*
                 })
+            }
+        }
+    }.into()
+}
+
+#[proc_macro_derive(FromPostgres)]
+pub fn derive_from_postgres(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident;
+    
+    let from_postgres_fields = input.fields.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_name_string = field.ident.as_ref().unwrap().to_string();
+        quote! {
+            #field_name: row.get(#field_name_string)
+        }
+    }).collect::<Vec<_>>();
+    
+    let try_from_postgres_fields = input.fields.iter().map(|field| {
+        let field_name = field.ident.as_ref().unwrap();
+        let field_name_string = field.ident.as_ref().unwrap().to_string();
+        quote! {
+            #field_name: row.try_get(#field_name_string).map_err(|_| tusk_rs::FromPostgresError::MissingColumn(#field_name_string))?
+        }
+    }).collect::<Vec<_>>();
+    
+    quote! {
+        impl tusk_rs::FromPostgres for #struct_name {
+            fn from_postgres(row: &tusk_rs::Row) -> #struct_name {
+                #struct_name {
+                    #(#from_postgres_fields),*
+                }
+            }
+            fn try_from_postgres(row: &tusk_rs::Row) -> Result<#struct_name, tusk_rs::FromPostgresError> {
+                Ok(#struct_name {
+                    #(#try_from_postgres_fields),*
+                })
+            }
+        }
+    }.into()
+}
+
+#[proc_macro_derive(PostgresReadFields)]
+pub fn derive_postgres_read_fields(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident;
+    
+    let fields = input.fields.iter().map(|field| {
+        field.ident.as_ref().unwrap().to_string()
+    }).collect::<Vec<_>>().join(",");
+    
+    quote! {
+        impl tusk_rs::PostgresReadFields for #struct_name {
+            fn read_fields() -> &'static str {
+                #fields 
+            }
+        }
+    }.into()
+}
+
+#[proc_macro_derive(PostgresReadable)]
+pub fn derive_postgres_readable(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident;
+    
+    quote! {
+        impl tusk_rs::PostgresReadable for #struct_name {
+            fn required_joins() -> &'static str {
+                ""
+            }
+        }
+    }.into()
+}
+
+#[proc_macro_derive(PostgresWriteFields)]
+pub fn derive_postgres_write_fields(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident;
+    
+    let fields = input.fields.iter().map(|field| {
+        field.ident.as_ref().unwrap().to_string()
+    }).collect::<Vec<_>>();
+    
+    quote! {
+        impl tusk_rs::PostgresWriteFields for #struct_name {
+            fn write_fields() -> &'static [&'static str] {
+                &[#(#fields),*]
+            }
+        }
+    }.into()
+}
+#[proc_macro_derive(PostgresWriteable)]
+pub fn derive_postgres_writeable(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident;
+    
+    let fields = input.fields.iter().map(|field| {
+        let f = field.ident.as_ref().unwrap();
+        let f_name = field.ident.as_ref().unwrap().to_string();
+        quote! {
+            #f_name => Box::new(std::mem::take(&mut self.#f))
+        }
+    }).collect::<Vec<_>>();
+    
+    quote! {
+        impl tusk_rs::PostgresWriteable for #struct_name {
+            fn write(mut self) -> tusk_rs::PostgresWrite {
+                let mut arguments: Vec<Box<(dyn tusk_rs::ToSql + Sync)>> = vec![];
+                let fields = <Self as tusk_rs::PostgresWriteFields>::write_fields();
+                for f in fields {
+                    arguments.push(
+                        match *f {
+                            #(#fields),*,
+                            _ => panic!("Unknown field {}!", f)
+                        }
+                    )
+                }
+                tusk_rs::PostgresWrite {
+                    fields,
+                    arguments
+                }
             }
         }
     }.into()

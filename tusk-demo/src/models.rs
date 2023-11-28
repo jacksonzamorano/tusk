@@ -1,7 +1,13 @@
-
+use tusk_rs_derive::{FromPostgres, PostgresReadFields, PostgresWriteFields, PostgresWriteable};
 
 
 pub struct RouteData {}
+
+#[derive(FromPostgres, PostgresReadFields,  PostgresWriteFields, PostgresWriteable)]
+pub struct TestFromPostgres {
+	pub username: String,
+	pub password: String
+}
 
 // #[autoquery(table_name=users)]
 // #[derive(ToJson)]

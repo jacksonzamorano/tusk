@@ -1,6 +1,6 @@
 use super::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
+use crate::DatabaseConnection;
 use crate::{config::DatabaseConfig, database::Database};
-use deadpool_postgres::Object;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -247,7 +247,7 @@ impl<T: 'static> Server<T> {
         created_request
     }
 
-    async fn default_error(_: Request, _: Object, _: T) -> Result<Response, RouteError> {
+    async fn default_error(_: Request, _: DatabaseConnection, _: T) -> Result<Response, RouteError> {
         Ok(Response::string("404 not found").status(ResponseStatusCode::NotFound))
     }
 
@@ -373,13 +373,13 @@ impl<T> RouteStorage<T> {
 type AsyncRouteHandler<T> = Box<
     fn(
         Request,
-        crate::PostgresConn,
+        crate::DatabaseConnection,
         T,
     ) -> Pin<Box<dyn Future<Output = Result<Response, RouteError>>>>,
 >;
 type AsyncTreatmentHandler<T> = Box<
     fn(
         Request,
-        crate::PostgresConn,
-    ) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::PostgresConn), RouteError>>>>,
+        crate::DatabaseConnection,
+    ) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::DatabaseConnection), RouteError>>>>,
 >;
