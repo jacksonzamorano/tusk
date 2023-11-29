@@ -43,7 +43,7 @@ impl PostgresWrite {
         for ix in 0..(self.arguments.len() / self.fields.len()) {
             let mut iter_args = vec![];
             for jx in 0..self.fields.len() {
-                iter_args.push(format!("${}", ix * self.fields.len() + jx))
+                iter_args.push(format!("${}", ix * self.fields.len() + jx + 1))
             }
             arg_groups.push(format!("({})", iter_args.join(",")));
         }

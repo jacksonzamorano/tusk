@@ -49,6 +49,8 @@ pub enum PostgresReadError {
     Unknown(tokio_postgres::Error),
     // (Column)
     AmbigiousColumn(String),
+    // (Table)
+    PermissionDenied(String),
 }
 impl PostgresReadError {
     pub fn from_pg_err(err: tokio_postgres::Error) -> PostgresReadError {
@@ -64,6 +66,7 @@ impl PostgresReadError {
                         .unwrap()
                         .to_string(),
                 ),
+                "42501" => PostgresReadError::PermissionDenied(err.as_db_error().unwrap().table().unwrap().to_string()),
                 _ => PostgresReadError::Unknown(err),
             }
         } else {
@@ -84,6 +87,8 @@ pub enum PostgresWriteError {
     UniqueConstraintViolation(String, String),
     // (Column)
     NotNullConstraintViolation(String),
+    // (Table)
+    PermissionDenied(String),
     Unknown(tokio_postgres::Error),
 }
 impl PostgresWriteError {
@@ -99,6 +104,7 @@ impl PostgresWriteError {
                 "23502" => PostgresWriteError::NotNullConstraintViolation(
                     err.as_db_error().unwrap().column().unwrap().to_string(),
                 ),
+                "42501" => PostgresWriteError::PermissionDenied(err.as_db_error().unwrap().table().unwrap().to_string()),
                 _ => PostgresWriteError::Unknown(err),
             }
         } else {
@@ -190,7 +196,7 @@ impl DatabaseConnection {
         &self,
         write: PostgresWrite,
     ) -> Result<Vec<T>, PostgresWriteError> {
-        let (insert_q, insert_a) = write.into_insert(T::table_name());
+        let (insert_q, insert_a) = write.into_bulk_insert(T::table_name());
         Ok(self
             .cn
             .query(&format!("{} RETURNING *", insert_q), insert_a.as_slice())

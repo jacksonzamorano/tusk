@@ -297,7 +297,7 @@ impl ToJson for String {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += &self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+        o += &self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\t', "\\t");
         o += "\"";
         o
     }
@@ -306,7 +306,7 @@ impl ToJson for str {
     fn to_json(&self) -> String {
         let mut o = String::new();
         o += "\"";
-        o += &self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+        o += &self.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\t', "\\t");
         o += "\"";
         o
     }
