@@ -234,7 +234,7 @@ impl DatabaseConnection {
         Ok(self
             .cn
             .query(
-                &format!("UPDATE {} {} RETURNING *", T::table_name(), query),
+                &format!("UPDATE {} SET {} RETURNING *", T::table_name(), query),
                 args,
             )
             .await?
@@ -246,7 +246,7 @@ impl DatabaseConnection {
 
     pub async fn delete<T: PostgresTable>(&self, condition: &str, args: &[&(dyn ToSql + Sync)]) {
         _ = self.cn.query(
-            &format!("DELETE FROM {} {}", T::table_name(), condition),
+            &format!("DELETE FROM {} SET {}", T::table_name(), condition),
             args,
         ).await;
     }
