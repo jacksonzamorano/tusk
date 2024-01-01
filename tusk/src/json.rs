@@ -36,7 +36,7 @@ impl JsonObject {
                         current_key.push(key_content)
                     } else {
                         // Skip the colon (and spaces)
-                        while let Some(t) = enumerator.next() {
+                        for t in enumerator.by_ref() {
                             if t == ':' { break }
                         }
                         break 'key;
