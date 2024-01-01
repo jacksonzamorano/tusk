@@ -35,8 +35,10 @@ impl JsonObject {
                     if key_content != '"' {
                         current_key.push(key_content)
                     } else {
-                        // Skip the colon
-                        enumerator.next();
+                        // Skip the colon (and spaces)
+                        while let Some(t) = enumerator.next() {
+                            if t == ':' { break }
+                        }
                         break 'key;
                     }
                 }
