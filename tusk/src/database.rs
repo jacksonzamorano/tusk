@@ -244,11 +244,12 @@ impl DatabaseConnection {
             .unwrap())
     }
 
-    pub async fn delete<T: PostgresTable>(&self, condition: &str, args: &[&(dyn ToSql + Sync)]) {
-        _ = self.cn.query(
-            &format!("DELETE FROM {} SET {}", T::table_name(), condition),
+    pub async fn delete<T: PostgresTable>(&self, condition: &str, args: &[&(dyn ToSql + Sync)]) -> () {
+        let _ = self.cn.query(
+            &format!("DELETE FROM {} {}", T::table_name(), condition),
             args,
         ).await;
+        return;
     }
 }
 
