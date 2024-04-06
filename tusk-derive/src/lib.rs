@@ -378,7 +378,7 @@ pub fn derive_postgres_writeable(item: TokenStream) -> TokenStream {
 }
 #[proc_macro]
 pub fn embed(item: TokenStream) -> TokenStream {
-    let path = item.to_string().replace("\"", "");
+    let path = item.to_string().replace('\"', "");
     let resolved_path = std::fs::canonicalize(path).expect("Invalid path!");
     let contents = std::fs::read(&resolved_path).unwrap_or_else(|_| panic!("Could not read contents at {}", resolved_path.display()));
     let contents_string = String::from_utf8(contents).unwrap();

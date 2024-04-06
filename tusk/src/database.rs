@@ -198,10 +198,10 @@ impl DatabaseConnection {
         write: PostgresWrite,
     ) -> Result<Vec<T>, PostgresWriteError> {
         let (insert_q, insert_a) = write.into_bulk_insert(T::table_name());
-        if insert_a.len() == 0 {
+        if insert_a.is_empty() {
             return Err(PostgresWriteError::NoRows);
         }
-        let join_str = if T::joins().len() > 0 { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
+        let join_str = if !T::joins().is_empty() { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
         Ok(self
             .cn
             .query(&format!("{}{} RETURNING {}", insert_q, join_str, T::read_fields().join(",")), insert_a.as_slice())
@@ -218,7 +218,7 @@ impl DatabaseConnection {
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<T, PostgresWriteError> {
         let (insert_q, insert_a) = write.into_update(T::table_name(), args.len());
-        let join_str = if T::joins().len() > 0 { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
+        let join_str = if !T::joins().is_empty() { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
         Ok(self
             .cn
             .query(
@@ -237,7 +237,7 @@ impl DatabaseConnection {
         query: &str,
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<T, PostgresWriteError> {
-        let join_str = if T::joins().len() > 0 { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
+        let join_str = if !T::joins().is_empty() { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
         Ok(self
             .cn
             .query(
