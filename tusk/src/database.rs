@@ -4,7 +4,7 @@ use postgres_openssl::MakeTlsConnector;
 use tokio_postgres::{types::ToSql, NoTls, Row};
 
 use crate::{
-    config::DatabaseConfig, query::PostgresReadable, FromPostgres, PostgresTable, PostgresWrite,
+    config::DatabaseConfig, query::PostgresReadable, FromPostgres, PostgresTable, PostgresWrite, PostgresReadFields
 };
 
 /// A thin wrapper for the Deadpool Postgres library.
@@ -89,6 +89,7 @@ pub enum PostgresWriteError {
     NotNullConstraintViolation(String),
     // (Table)
     PermissionDenied(String),
+    NoRows,
     Unknown(tokio_postgres::Error),
 }
 impl PostgresWriteError {
@@ -140,9 +141,9 @@ impl DatabaseConnection {
             .query(
                 &format!(
                     "SELECT {} FROM {} {} {}",
-                    T::read_fields(),
+                    T::read_fields().join(","),
                     T::table_name(),
-                    T::required_joins(),
+                    T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" "),
                     query
                 ),
                 args,
@@ -163,9 +164,9 @@ impl DatabaseConnection {
             .query(
                 &format!(
                     "SELECT {} FROM {} {} {}",
-                    T::read_fields(),
+                    T::read_fields().join(","),
                     T::table_name(),
-                    T::required_joins(),
+                    T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" "),
                     query
                 ),
                 args,
@@ -177,14 +178,14 @@ impl DatabaseConnection {
             .ok_or_else(|| PostgresReadError::NoResults)
     }
 
-    pub async fn insert<T: FromPostgres + PostgresTable>(
+    pub async fn insert<T: FromPostgres + PostgresTable + PostgresReadFields>(
         &self,
         write: PostgresWrite,
     ) -> Result<T, PostgresWriteError> {
         let (insert_q, insert_a) = write.into_insert(T::table_name());
         Ok(self
             .cn
-            .query(&format!("{} RETURNING *", insert_q), insert_a.as_slice())
+            .query(&format!("{} RETURNING {}", insert_q, T::read_fields().join(",")), insert_a.as_slice())
             .await?
             .iter()
             .map(|x| T::from_postgres(x))
@@ -192,31 +193,36 @@ impl DatabaseConnection {
             .unwrap())
     }
 
-    pub async fn insert_vec<T: FromPostgres + PostgresTable>(
+    pub async fn insert_vec<T: FromPostgres + PostgresTable + PostgresReadable>(
         &self,
         write: PostgresWrite,
     ) -> Result<Vec<T>, PostgresWriteError> {
         let (insert_q, insert_a) = write.into_bulk_insert(T::table_name());
+        if insert_a.len() == 0 {
+            return Err(PostgresWriteError::NoRows);
+        }
+        let join_str = if T::joins().len() > 0 { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
         Ok(self
             .cn
-            .query(&format!("{} RETURNING *", insert_q), insert_a.as_slice())
+            .query(&format!("{}{} RETURNING {}", insert_q, join_str, T::read_fields().join(",")), insert_a.as_slice())
             .await?
             .iter()
             .map(|x| T::from_postgres(x))
             .collect())
     }
 
-    pub async fn update<T: FromPostgres + PostgresTable>(
+    pub async fn update<T: FromPostgres + PostgresTable + PostgresReadable>(
         &self,
         write: PostgresWrite,
         condition: &str,
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<T, PostgresWriteError> {
         let (insert_q, insert_a) = write.into_update(T::table_name(), args.len());
+        let join_str = if T::joins().len() > 0 { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
         Ok(self
             .cn
             .query(
-                &format!("{} WHERE {} RETURNING *", insert_q, condition),
+                &format!("{}{} WHERE {} RETURNING *", insert_q, join_str, condition),
                 [&args, insert_a.as_slice()].concat().as_slice(),
             )
             .await?
@@ -226,15 +232,16 @@ impl DatabaseConnection {
             .unwrap())
     }
 
-    pub async fn update_set<T: FromPostgres + PostgresTable>(
+    pub async fn update_set<T: FromPostgres + PostgresTable + PostgresReadable>(
         &self,
         query: &str,
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<T, PostgresWriteError> {
+        let join_str = if T::joins().len() > 0 { format!(" FROM {}", T::joins().iter().map(|j| j.to_read()).collect::<Vec<String>>().join(" ")) } else { "".to_string() };
         Ok(self
             .cn
             .query(
-                &format!("UPDATE {} SET {} RETURNING *", T::table_name(), query),
+                &format!("UPDATE {} SET {}{} RETURNING *", T::table_name(), join_str, query),
                 args,
             )
             .await?

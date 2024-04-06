@@ -11,6 +11,20 @@ pub enum FromPostgresError {
     MissingColumn(&'static str),
 }
 
+pub struct PostgresJoin {
+    pub join_type: &'static str,
+    pub table: &'static str,
+    pub on: &'static str,
+}
+impl PostgresJoin {
+    pub fn to_read(&self) -> String {
+        format!("{} {} ON {}", self.join_type, self.table, self.on)
+    }
+    pub fn to_write(&self) -> String {
+        format!("{} {}", self.join_type, self.table)
+    }
+}
+
 #[derive(Debug)]
 pub struct PostgresWrite {
     pub fields: &'static [&'static str],
@@ -88,16 +102,17 @@ impl PostgresWrite {
 pub trait PostgresTable {
     fn table_name() -> &'static str;
 }
+pub trait PostgresJoins {
+    fn joins() -> &'static [&'static PostgresJoin];
+}
 pub trait PostgresReadFields {
-    fn read_fields() -> &'static str;
+    fn read_fields() -> &'static [&'static str];
 }
-pub trait PostgresReadable: PostgresReadFields {
-    fn required_joins() -> &'static str;
-}
+pub trait PostgresReadable: PostgresReadFields + PostgresJoins {}
 pub trait PostgresWriteFields {
     fn write_fields() -> &'static [&'static str];
 }
-pub trait PostgresWriteable: PostgresWriteFields {
+pub trait PostgresWriteable: PostgresWriteFields + PostgresJoins {
     fn write(self) -> PostgresWrite;
 }
 pub trait PostgresBulkWriteable {

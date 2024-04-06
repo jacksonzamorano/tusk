@@ -142,7 +142,7 @@ impl Response {
     pub fn apply_cors(&mut self, origin: &String, headers: &String) {
         self.headers.insert("Access-Control-Allow-Origin".to_string(), origin.to_string());
         self.headers.insert("Access-Control-Allow-Headers".to_string(), headers.to_string());
-        self.headers.insert("Access-Control-Allow-Methods".to_string(), "POST, PATCH, GET, OPTIONS, DELETE".to_string());
+        self.headers.insert("Access-Control-Allow-Methods".to_string(), "POST, PATCH, GET, OPTIONS, DELETE, PUT".to_string());
     }
 
     /// Convert the body of the request into bytes, consuming

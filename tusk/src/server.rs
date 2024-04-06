@@ -4,6 +4,7 @@ use crate::{config::DatabaseConfig, database::Database};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::rc::Rc;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -13,17 +14,18 @@ use tokio::net::{TcpListener, TcpStream};
 ///
 /// Server accepts a generic type `T`. This type is injected
 /// into all routes as the final argument.
-pub struct Server<T> {
+pub struct Server<T, V> {
     routes: RouteStorage<T>,
     listener: TcpListener,
     database: Database,
-    treatment: AsyncTreatmentHandler<T>,
+    treatment: AsyncTreatmentHandler<T, V>,
     postfix: Option<fn(Response) -> Response>,
     cors_origin: String,
     cors_headers: String,
-    debugging_enabled: bool
+    debugging_enabled: bool,
+    initialization_data: std::rc::Rc<V>
 }
-impl<T: 'static> Server<T> {
+impl<T: 'static, V: 'static> Server<T, V> {
     /// Create a new server.
     /// Specify a port, [`DatabaseConfig`], and an async
     /// function with arguments [`Request`] and a PostgresConn
@@ -31,8 +33,9 @@ impl<T: 'static> Server<T> {
     pub async fn new(
         port: i32,
         database: DatabaseConfig,
-        treatment: AsyncTreatmentHandler<T>,
-    ) -> Server<T> {
+        treatment: AsyncTreatmentHandler<T, V>,
+        initialization_data: V,
+    ) -> Server<T, V> {
         Server {
             routes: RouteStorage::new(),
             listener: TcpListener::bind(format!("127.0.0.1:{}", port))
@@ -44,7 +47,8 @@ impl<T: 'static> Server<T> {
             cors_origin: "*".to_string(),
             cors_headers: "Origin, X-Requested-With, Content-Type, Accept, Authorization"
                 .to_string(),
-            debugging_enabled: false
+            debugging_enabled: false,
+            initialization_data: Rc::new(initialization_data),
         }
     }
     
@@ -96,7 +100,7 @@ impl<T: 'static> Server<T> {
     pub async fn start(&mut self) {
         self.routes.prep();
         let default: AsyncRouteHandler<T> =
-            Box::new(move |a, b, c| Box::pin(Server::default_error(a, b, c)));
+            Box::new(move |a, b, c| Box::pin(Server::<T,V>::default_error(a, b, c)));
         loop {
             if let Ok(conn) = self.listener.accept().await {
                 let (mut req_stream, _) = conn;
@@ -122,8 +126,9 @@ impl<T: 'static> Server<T> {
                     stream: req_stream,
                 };
                 let mut bytes = Vec::new();
+                let initialization_data = self.initialization_data.clone();
                 let mut response = match self.database.get_connection().await {
-                    Ok(db_inst) => match (self.treatment)(req.request, db_inst).await {
+                    Ok(db_inst) => match (self.treatment)(req.request, db_inst, initialization_data).await {
                         Ok((treat, req, obj)) => {
                             let mut body = matched_path(req, obj, treat)
                                 .await
@@ -377,9 +382,10 @@ type AsyncRouteHandler<T> = Box<
         T,
     ) -> Pin<Box<dyn Future<Output = Result<Response, RouteError>>>>,
 >;
-type AsyncTreatmentHandler<T> = Box<
+type AsyncTreatmentHandler<T, V> = Box<
     fn(
         Request,
         crate::DatabaseConnection,
+        Rc<V>
     ) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::DatabaseConnection), RouteError>>>>,
 >;

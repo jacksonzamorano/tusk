@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate quote;
 extern crate proc_macro;
+
 use proc_macro::TokenStream;
 use quote::{format_ident, ToTokens};
 use syn::{parse_macro_input, ItemFn, ItemStruct};
@@ -98,7 +99,10 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
             .to_string()
     );
 
-    let mapped_inputs_outputs = inputs
+    let mut mapped_inputs_outputs_before = inputs.clone();
+    let last_input = mapped_inputs_outputs_before.pop();
+    let default_inputs = mapped_inputs_outputs_before.iter().collect::<Vec<_>>();
+    let mapped_inputs_outputs = mapped_inputs_outputs_before
         .iter()
         .map(|x| {
             format_ident!(
@@ -113,13 +117,53 @@ pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
+    let param_arg_name = format_ident!("{}", last_input
+        .as_ref()
+        .unwrap()
+        .to_token_stream()
+        .to_string()
+        .split(':')
+        .collect::<Vec<&str>>()[0]
+        .trim()
+        .to_string());
+
+    let mut is_rc = false;
+    let param_arg_type = match last_input.unwrap().value() {
+        syn::FnArg::Typed(x) => {
+            match x.ty.as_ref() {
+                syn::Type::Path(p) => {
+                    if p.path.segments.last().to_token_stream().to_string().starts_with("Rc") {
+                        match p.path.segments.last().unwrap().arguments {
+                            syn::PathArguments::AngleBracketed(ref args) => {
+                                is_rc = true;
+                                args.args.first().unwrap().to_token_stream()
+                            },
+                            _ => panic!("Invalid input type"), 
+                        }
+                    } else {
+                        panic!("Unexpected type, either a Rc or a &Type is expected")
+                    }
+                },
+                syn::Type::Reference(rf) => {
+                    rf.elem.as_ref().to_token_stream()
+                }
+                _ =>  panic!("Unexpected type, either a Rc or a &Type is expected")
+            }
+        },
+        _ => panic!("Arg did not match any type"), 
+    };
+
+    let param_arg_name_fill = if is_rc { quote! {} } else { quote! { let #param_arg_name = init_param_rced.as_ref(); } };
+    let inner_fn_arg_name = if is_rc { quote! { #param_arg_name: std::rc::Rc<#param_arg_type> } } else { quote! { init_param_rced: std::rc::Rc<#param_arg_type> } }; 
+    
     quote! {
         use core::future::Future;
         use tokio::macros::support::Pin;
-        pub fn #data_name() -> Box<fn(Request, tusk_rs::DatabaseConnection) -> Pin<Box<dyn Future<Output = Result<(#o, Request, tusk_rs::DatabaseConnection), RouteError>>>>> {
-            Box::new(move |a,b| Box::pin(#data_name_int(a,b)))
+        pub fn #data_name() -> Box<fn(Request, tusk_rs::DatabaseConnection, std::rc::Rc<#param_arg_type>) -> Pin<Box<dyn Future<Output = Result<(#o, Request, tusk_rs::DatabaseConnection), RouteError>>>>> {
+            Box::new(move |a,b,c| Box::pin(#data_name_int(a,b,c)))
         }
-        async fn #data_name_int(#inputs) -> Result<(#o, Request, tusk_rs::DatabaseConnection), RouteError> {
+        async fn #data_name_int(#(#default_inputs),* , #inner_fn_arg_name) -> Result<(#o, Request, tusk_rs::DatabaseConnection), RouteError> {
+            #param_arg_name_fill
             let fn_eval = #data_block;
             return Ok((fn_eval, #(#mapped_inputs_outputs),*));
         }
@@ -239,6 +283,20 @@ pub fn derive_from_postgres(item: TokenStream) -> TokenStream {
     }.into()
 }
 
+#[proc_macro_derive(PostgresJoins)]
+pub fn derive_postgres_joins(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+    let struct_name = input.ident;
+    
+    quote! {
+        impl tusk_rs::PostgresJoins for #struct_name {
+            fn joins() -> &'static [&'static tusk_rs::PostgresJoin] {
+                &[]
+            }
+        }
+    }.into()
+}
+
 #[proc_macro_derive(PostgresReadFields)]
 pub fn derive_postgres_read_fields(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -246,12 +304,12 @@ pub fn derive_postgres_read_fields(item: TokenStream) -> TokenStream {
     
     let fields = input.fields.iter().map(|field| {
         field.ident.as_ref().unwrap().to_string()
-    }).collect::<Vec<_>>().join(",");
+    }).collect::<Vec<_>>();
     
     quote! {
         impl tusk_rs::PostgresReadFields for #struct_name {
-            fn read_fields() -> &'static str {
-                #fields 
+            fn read_fields() -> &'static [&'static str] {
+                &[#(#fields),*]
             }
         }
     }.into()
@@ -263,11 +321,7 @@ pub fn derive_postgres_readable(item: TokenStream) -> TokenStream {
     let struct_name = input.ident;
     
     quote! {
-        impl tusk_rs::PostgresReadable for #struct_name {
-            fn required_joins() -> &'static str {
-                ""
-            }
-        }
+        impl tusk_rs::PostgresReadable for #struct_name {}
     }.into()
 }
 
@@ -320,5 +374,15 @@ pub fn derive_postgres_writeable(item: TokenStream) -> TokenStream {
                 }
             }
         }
+    }.into()
+}
+#[proc_macro]
+pub fn embed(item: TokenStream) -> TokenStream {
+    let path = item.to_string().replace("\"", "");
+    let resolved_path = std::fs::canonicalize(path).expect("Invalid path!");
+    let contents = std::fs::read(&resolved_path).unwrap_or_else(|_| panic!("Could not read contents at {}", resolved_path.display()));
+    let contents_string = String::from_utf8(contents).unwrap();
+    quote! {
+        #contents_string
     }.into()
 }
