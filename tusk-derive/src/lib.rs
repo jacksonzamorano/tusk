@@ -303,12 +303,15 @@ pub fn derive_postgres_read_fields(item: TokenStream) -> TokenStream {
     let struct_name = input.ident;
     
     let fields = input.fields.iter().map(|field| {
-        field.ident.as_ref().unwrap().to_string()
+        let field_name = field.ident.as_ref().unwrap().to_string();
+        quote! {
+            tusk_rs::local!(#field_name)
+        }
     }).collect::<Vec<_>>();
     
     quote! {
         impl tusk_rs::PostgresReadFields for #struct_name {
-            fn read_fields() -> &'static [&'static str] {
+            fn read_fields() -> &'static [&'static tusk_rs::PostgresField] {
                 &[#(#fields),*]
             }
         }

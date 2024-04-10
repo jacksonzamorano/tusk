@@ -305,6 +305,14 @@ impl<T> Route<T> {
         }
     }
 }
+impl<T> core::fmt::Debug for Route<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Route")
+            .field("path", &self.path)
+            .field("request_type", &self.request_type)
+            .finish()
+    }
+}
 
 #[derive(Debug)]
 pub struct IncomingRequest {
@@ -370,6 +378,7 @@ impl<T> RouteStorage<T> {
         self.routes_get.sort_by(|a, b| a.path.cmp(&b.path));
         self.routes_post.sort_by(|a, b| a.path.cmp(&b.path));
         self.routes_put.sort_by(|a, b| a.path.cmp(&b.path));
+        self.routes_patch.sort_by(|a, b| a.path.cmp(&b.path));
         self.routes_delete.sort_by(|a, b| a.path.cmp(&b.path));
         self.routes_any.sort_by(|a, b| a.path.cmp(&b.path));
     }

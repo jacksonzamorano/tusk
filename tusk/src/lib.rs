@@ -13,7 +13,8 @@ use deadpool_postgres::Object;
 pub use json::{FromJson, JsonArray, JsonObject, ToJson};
 pub use query::{
     FromPostgres, FromPostgresError, PostgresReadFields, PostgresWrite, PostgresWriteFields,
-    PostgresWriteable, PostgresReadable, PostgresTable, PostgresJoins, PostgresJoin
+    PostgresWriteable, PostgresReadable, PostgresTable, PostgresJoins, PostgresJoin, PostgresField,
+    PostgresFieldLocation
 };
 pub use reqres::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
 pub use server::{IncomingRequest, Route, Server};
