@@ -119,8 +119,8 @@ impl JsonObject {
     /// # Arguments
     ///
     /// * `key` — The key to retrieve from.
-    pub fn get<T: JsonRetrieve>(&self, key: &str) -> Option<T> {
-        T::parse(self.keys.get(key))
+    pub fn get<T: JsonRetrieve>(&self, key: &str) -> Result<T, JsonParseError> {
+        T::parse(key.to_string(), self.keys.get(key))
     }
 
     /// Return a key of the JSON object as a type which
@@ -131,19 +131,6 @@ impl JsonObject {
     /// * `key` — The key to retrieve from.
     pub fn set<T: ToJson>(&mut self, key: &str, data: T) {
         self.keys.insert(key.to_string(), data.to_json());
-    }
-
-    /// A convienience function that calls the `get` method
-    /// and validates that it exists and was parsed correctly
-    /// or returns a `RouteError::bad_request` (400 error) with
-    /// the message provided.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` — The key to retrieve from.
-    /// * `err` — The error message to return if key is None.
-    pub fn validate_get<T: JsonRetrieve>(&self, key: &str, err: &str) -> Result<T, RouteError> {
-        self.get(key).ok_or(RouteError::bad_request(err))
     }
 }
 #[derive(Debug)]
@@ -244,18 +231,20 @@ impl JsonArray {
     /// # Arguments
     ///
     /// * `index` — The index to retrieve from.
-    pub fn get<T: JsonRetrieve>(&self, index: usize) -> Option<T> {
-        T::parse(self.values.get(index))
+    pub fn get<T: JsonRetrieve>(&self, index: usize) -> Result<T, JsonParseError> {
+        T::parse(index.to_string(), self.values.get(index))
     }
 
     /// Converts all elements of this JSONArray
     /// to a type that implements JsonRetrieve.
     /// Drops any types that are not parsed properly.
-    pub fn map<T: JsonRetrieve>(&self) -> Vec<T> {
-        self.values
-            .iter()
-            .filter_map(|x| T::parse(Some(x)))
-            .collect()
+    pub fn map<T: JsonRetrieve>(&self) -> Result<Vec<T>, JsonParseError> {
+        let mut build = Vec::new();
+        for i in 0..self.values.len() {
+            let value = &self.values[i];
+            build.push(T::parse(i.to_string(), Some(value))?);
+        }
+        Ok(build)
     }
 }
 
@@ -278,6 +267,20 @@ impl JsonType {
     }
 }
 
+#[derive(Debug)]
+pub enum JsonParseError {
+    NotFound(String),
+    InvalidType(String, &'static str),
+}
+impl From<JsonParseError> for RouteError {
+    fn from(val: JsonParseError) -> Self {
+        match val {
+            JsonParseError::NotFound(k) => RouteError::bad_request(&format!("Key {} not found", k)),
+            JsonParseError::InvalidType(k, t) => RouteError::bad_request(&format!("Key {} expected type {}", k, t)),
+        }
+    }
+}
+
 /// ToJson is a trait that allows any conforming
 /// structs to convert to a JSON format.
 pub trait ToJson {
@@ -287,14 +290,10 @@ pub trait ToJson {
 }
 
 pub trait FromJson {
-    fn from_json(json: &JsonObject) -> Option<Self>
-    where
-        Self: Sized;
-    fn from_json_validated(json: &JsonObject) -> Result<Self, RouteError>
+    fn from_json(json: &JsonObject) -> Result<Self, JsonParseError>
     where
         Self: Sized;
 }
-
 impl ToJson for String {
     fn to_json(&self) -> String {
         let mut o = String::new();
@@ -425,85 +424,107 @@ impl ToJson for JsonArray {
 }
 
 pub trait JsonRetrieve {
-    fn parse(value: Option<&String>) -> Option<Self>
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError>
     where
         Self: Sized;
 }
 
 impl JsonRetrieve for String {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        let mut v = value?.clone();
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        let mut v = value.ok_or(JsonParseError::NotFound(key))?.clone();
         v.remove(0);
         v.pop();
         v = v.replace("\\\"", "\"");
-        Some(v)
+        Ok(v)
     }
 }
 impl JsonRetrieve for i32 {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        value?.parse().ok()
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        if let Some(v) = value {
+            Ok(v.parse().map_err(|_| JsonParseError::InvalidType(key, "i32"))?)
+        } else {
+            Err(JsonParseError::NotFound(key))
+        }
     }
 }
 impl JsonRetrieve for i64 {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        value?.parse().ok()
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        if let Some(v) = value {
+            Ok(v.parse().map_err(|_| JsonParseError::InvalidType(key, "i64"))?)
+        } else {
+            Err(JsonParseError::NotFound(key))
+        }
     }
 }
 impl JsonRetrieve for f32 {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        value?.parse().ok()
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        if let Some(v) = value {
+            Ok(v.parse().map_err(|_| JsonParseError::InvalidType(key, "f32"))?)
+        } else {
+            Err(JsonParseError::NotFound(key))
+        }
     }
 }
 impl JsonRetrieve for f64 {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        value?.parse().ok()
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        if let Some(v) = value {
+            Ok(v.parse().map_err(|_| JsonParseError::InvalidType(key, "f64"))?)
+        } else {
+            Err(JsonParseError::NotFound(key))
+        }
     }
 }
 impl JsonRetrieve for bool {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        match value?.as_ref() {
-            "true" => Some(true),
-            "false" => Some(false),
-            _ => None,
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError>  {
+        if let Some(v) = value {
+            match v.as_ref() {
+                "true" => Ok(true),
+                "false" => Ok(false),
+                _ => Err(JsonParseError::InvalidType(key, "bool")),
+            }
+        } else {
+            Err(JsonParseError::NotFound(key))
         }
     }
 }
 impl<T: JsonRetrieve> JsonRetrieve for Vec<T> {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        Some(JsonArray::from_string(value?.clone()).map())
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        JsonArray::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()).map()
     }
 }
 impl<T: JsonRetrieve> JsonRetrieve for Option<T> {
-    fn parse(value: Option<&String>) -> Option<Self> {
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
         if let Some(v) = value {
             if v != "null" {
-                return Some(T::parse(value));
+                return Ok(Some(T::parse(key, value)?));
             }
         }
-        Some(None)
+        Ok(None)
     }
 }
 impl JsonRetrieve for JsonObject {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        Some(JsonObject::from_string(value?.clone()))
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        Ok(JsonObject::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()))
     }
 }
 impl JsonRetrieve for JsonArray {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        Some(JsonArray::from_string(value?.clone()))
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        Ok(JsonArray::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()))
     }
 }
 impl JsonRetrieve for DateTime<Utc> {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        Some(
-            DateTime::parse_from_rfc3339(&value?.replace('\"', ""))
-                .ok()?
-                .with_timezone(&Utc),
-        )
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        if let Some(v) = value {
+            Ok(DateTime::parse_from_rfc3339(&v.replace('\"', ""))
+                .map_err(|_| JsonParseError::InvalidType(key, "RFC3339 Date"))?
+                .with_timezone(&Utc))
+        } else {
+            Err(JsonParseError::NotFound(key))
+        }
     }
 }
 impl<T: FromJson> JsonRetrieve for T {
-    fn parse(value: Option<&String>) -> Option<Self> {
-        Self::from_json(&JsonObject::from_string(value?.clone()))
+    fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
+        Self::from_json(&JsonObject::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()))
     }
 }

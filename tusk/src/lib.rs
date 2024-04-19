@@ -10,7 +10,7 @@ pub use chrono;
 pub use config::DatabaseConfig;
 pub use database::{Database, DatabaseError, DatabaseConnection};
 use deadpool_postgres::Object;
-pub use json::{FromJson, JsonArray, JsonObject, ToJson};
+pub use json::{FromJson, JsonArray, JsonObject, ToJson, JsonParseError};
 pub use query::{
     FromPostgres, FromPostgresError, PostgresReadFields, PostgresWrite, PostgresWriteFields,
     PostgresWriteable, PostgresReadable, PostgresTable, PostgresJoins, PostgresJoin, PostgresField,
