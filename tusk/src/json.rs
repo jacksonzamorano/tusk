@@ -14,13 +14,23 @@ pub struct JsonObject {
 }
 
 impl JsonObject {
+
+    /// Creates an empty JSON object.
+    /// This is useful for building a JSON
+    /// object from scratch.
+    pub fn empty() -> JsonObject {
+        JsonObject {
+            keys: HashMap::new()
+        }
+    }
+
     /// Builds a JSONObject from a string
     /// containing keys and values.
     ///
     /// # Arguments
     ///
     /// * `json` — An owned string containing the JSON.
-    pub fn from_string(json: String) -> JsonObject {
+    pub fn from_string(json: &String) -> JsonObject {
         let mut keys: HashMap<String, String> = HashMap::new();
 
         let mut current_key = String::new();
@@ -145,7 +155,7 @@ impl JsonArray {
     /// # Arguments
     ///
     /// * `json` — An owned string containing the JSON.
-    pub fn from_string(json: String) -> JsonArray {
+    pub fn from_string(json: &String) -> JsonArray {
         let mut values: Vec<String> = Vec::new();
         let json = json[1..json.chars().count()].to_string();
 
@@ -489,7 +499,7 @@ impl JsonRetrieve for bool {
 }
 impl<T: JsonRetrieve> JsonRetrieve for Vec<T> {
     fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
-        JsonArray::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()).map()
+        JsonArray::from_string(value.ok_or(JsonParseError::NotFound(key))?).map()
     }
 }
 impl<T: JsonRetrieve> JsonRetrieve for Option<T> {
@@ -504,12 +514,12 @@ impl<T: JsonRetrieve> JsonRetrieve for Option<T> {
 }
 impl JsonRetrieve for JsonObject {
     fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
-        Ok(JsonObject::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()))
+        Ok(JsonObject::from_string(value.ok_or(JsonParseError::NotFound(key))?))
     }
 }
 impl JsonRetrieve for JsonArray {
     fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
-        Ok(JsonArray::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()))
+        Ok(JsonArray::from_string(value.ok_or(JsonParseError::NotFound(key))?))
     }
 }
 impl JsonRetrieve for DateTime<Utc> {
@@ -525,6 +535,6 @@ impl JsonRetrieve for DateTime<Utc> {
 }
 impl<T: FromJson> JsonRetrieve for T {
     fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
-        Self::from_json(&JsonObject::from_string(value.ok_or(JsonParseError::NotFound(key))?.clone()))
+        Self::from_json(&JsonObject::from_string(value.ok_or(JsonParseError::NotFound(key))?))
     }
 }

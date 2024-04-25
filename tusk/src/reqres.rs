@@ -412,9 +412,9 @@ impl BodyContents {
             BodyContents::TYPE_JSON | BodyContents::TYPE_LD_JSON => {
                 let contents_string = String::from_utf8(data).unwrap();
                 if contents_string.starts_with('[') {
-                    BodyContents::JsonArray(JsonArray::from_string(contents_string))
+                    BodyContents::JsonArray(JsonArray::from_string(&contents_string))
                 } else {
-                    BodyContents::JsonObject(JsonObject::from_string(contents_string))
+                    BodyContents::JsonObject(JsonObject::from_string(&contents_string))
                 }
             }
             BodyContents::TYPE_PLAIN_TEXT => {
@@ -433,12 +433,6 @@ impl BodyContents {
             _ => Err(RouteError::bad_request("Expected JSON object.")),
         }
     }
-    pub fn as_json_object(self) -> JsonObject {
-        match self {
-            BodyContents::JsonObject(j) => j,
-            _ => JsonObject::from_string("{}".to_string()),
-        }
-    }
     pub fn json_array(&self) -> Result<&JsonArray, RouteError> {
         match self {
             BodyContents::JsonArray(j) => Ok(j),
@@ -455,13 +449,6 @@ impl BodyContents {
         match self {
             BodyContents::UrlEncoded(j) => j,
             _ => UrlEncoded::from_string("".to_string()),
-        }
-    }
-
-    pub fn as_json_array(self) -> JsonArray {
-        match self {
-            BodyContents::JsonArray(j) => j,
-            _ => JsonArray::from_string("[]".to_string()),
         }
     }
     pub fn as_bytes(self) -> Vec<u8> {
