@@ -30,7 +30,7 @@ impl JsonObject {
     /// # Arguments
     ///
     /// * `json` — An owned string containing the JSON.
-    pub fn from_string(json: &String) -> JsonObject {
+    pub fn from_string(json: &str) -> JsonObject {
         let mut keys: HashMap<String, String> = HashMap::new();
 
         let mut current_key = String::new();
@@ -143,11 +143,24 @@ impl JsonObject {
         self.keys.insert(key.to_string(), data.to_json());
     }
 }
+impl Default for JsonObject {
+    fn default() -> Self {
+        JsonObject::empty()
+    }
+}
+
 #[derive(Debug)]
 pub struct JsonArray {
     values: Vec<String>,
 }
 impl JsonArray {
+    /// Creates an empty JSON array.
+    /// This is useful for building a JSON
+    /// array from scratch.
+    pub fn empty() -> JsonArray {
+        JsonArray { values: Vec::new() }
+    }
+
     /// Builds a JSONArray from a string
     /// containing children that implement
     /// `JsonRetreive`
@@ -155,7 +168,7 @@ impl JsonArray {
     /// # Arguments
     ///
     /// * `json` — An owned string containing the JSON.
-    pub fn from_string(json: &String) -> JsonArray {
+    pub fn from_string(json: &str) -> JsonArray {
         let mut values: Vec<String> = Vec::new();
         let json = json[1..json.chars().count()].to_string();
 
@@ -249,12 +262,20 @@ impl JsonArray {
     /// to a type that implements JsonRetrieve.
     /// Drops any types that are not parsed properly.
     pub fn map<T: JsonRetrieve>(&self) -> Result<Vec<T>, JsonParseError> {
+        if self.values.is_empty() {
+            return Ok(Vec::new());
+        }
         let mut build = Vec::new();
         for i in 0..self.values.len() {
             let value = &self.values[i];
             build.push(T::parse(i.to_string(), Some(value))?);
         }
         Ok(build)
+    }
+}
+impl Default for JsonArray {
+    fn default() -> Self {
+        JsonArray::empty()
     }
 }
 

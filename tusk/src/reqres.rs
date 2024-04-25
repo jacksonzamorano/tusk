@@ -427,16 +427,28 @@ impl BodyContents {
         }
     }
 
-    pub fn json_object(&self) -> Result<&JsonObject, RouteError> {
+    pub fn to_json_object(&self) -> Result<&JsonObject, RouteError> {
         match self {
             BodyContents::JsonObject(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected JSON object.")),
         }
     }
-    pub fn json_array(&self) -> Result<&JsonArray, RouteError> {
+    pub fn to_json_array(&self) -> Result<&JsonArray, RouteError> {
         match self {
             BodyContents::JsonArray(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected JSON array.")),
+        }
+    }
+    pub fn into_json_object(self) -> Result<JsonObject, RouteError> {
+        match self {
+            BodyContents::JsonObject(j) => Ok(j),
+            _ => Err(RouteError::bad_request("Expected JSON object.")),
+        }
+    }
+    pub fn into_json_array(self) -> Result<JsonArray, RouteError> {
+        match self {
+            BodyContents::JsonArray(j) => Ok(j),
+            _ => Err(RouteError::bad_request("Expected JSON array")),
         }
     }
     pub fn url_encoded(&self) -> Result<&UrlEncoded, RouteError> {
