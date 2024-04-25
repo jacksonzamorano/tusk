@@ -260,7 +260,7 @@ impl JsonArray {
 
     /// Converts all elements of this JSONArray
     /// to a type that implements JsonRetrieve.
-    /// Drops any types that are not parsed properly.
+    /// Progagates errors if any child keys are invalid.
     pub fn map<T: JsonRetrieve>(&self) -> Result<Vec<T>, JsonParseError> {
         if self.values.is_empty() {
             return Ok(Vec::new());
@@ -314,17 +314,26 @@ impl From<JsonParseError> for RouteError {
 
 /// ToJson is a trait that allows any conforming
 /// structs to convert to a JSON format.
+///
+/// A default implemenation is most easily
+/// obtained by deriving this trait.
 pub trait ToJson {
     /// ToJson creates a JSON string from
     /// anything which implements it
     fn to_json(&self) -> String;
 }
 
+/// FromJs is a trait that allows any conforming
+/// structs to be converted from a JSON format.
+///
+/// A default implemenation is most easily
+/// obtained by deriving this trait.
 pub trait FromJson {
     fn from_json(json: &JsonObject) -> Result<Self, JsonParseError>
     where
         Self: Sized;
 }
+
 impl ToJson for String {
     fn to_json(&self) -> String {
         let mut o = String::new();

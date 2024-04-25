@@ -51,10 +51,14 @@ impl<T: 'static, V: 'static> Server<T, V> {
             initialization_data: Rc::new(initialization_data),
         }
     }
-    
+
+    /// Enable debugging. This will enable printing verbose information.
+    /// This is useful for debugging queries and other issues.
     pub fn enable_debugging(&mut self) {
         self.debugging_enabled = true
     }
+    /// Disable debugging. This will disable printing verbose information.
+    /// This is the default state.
     pub fn disable_debugging(&mut self) {
         self.debugging_enabled = false
     }
@@ -62,10 +66,21 @@ impl<T: 'static, V: 'static> Server<T, V> {
     /// Register a [`Route`]. Routes should NOT be registered
     /// after calling `Server::start`, as all routes are sorted
     /// for peformance when `start` is called.
+    ///
+    /// See [`Server::register`] for a better way to register routes.
     pub fn register(&mut self, r: Route<T>) {
         self.routes.add(r);
     }
-    /// Register many `Route`s at once.
+    /// Register many [`Route`]s at once. Routes should NOT be registered
+    /// after calling `Server::start`, as all routes are sorted
+    /// for peformance when `start` is called.
+    /// 
+    /// The recommended pattern for this is to break out
+    /// related routes into their own module and decorate
+    /// each route with #[route], then export a module function
+    /// which returns a Vec of all the routes within.
+    /// Note that this has no effect on performance, this just
+    /// keeps your code organized.
     pub fn module(&mut self, prefix: &str, rs: Vec<Route<T>>) {
         let mut applied_prefix = if prefix.ends_with('/') {
             prefix[0..prefix.len()].to_string()
@@ -269,17 +284,8 @@ impl<T: 'static, V: 'static> Server<T, V> {
 /// when a function is decorated with that macro, the function is
 /// rewritten such that it returns the Route.
 ///
-/// The route function should be an async function
-/// with arguments for:
-/// - [`Request`]
-/// - [`Object`] (aliased to `tusk_rs::PostgresConn` for readability)
-/// - `T`
-///
-/// It should return a `Result<Response, RouteError>`.
-///
-/// Finally, it must be annotated with the `#[route(METHOD path)]`
-/// macro, as it rewrites your function to be passable
-/// to a route.
+/// Manually creating this struct is not recommended.
+/// use the [`tusk_rs_derive::route`] macro instead.
 pub struct Route<T> {
     pub path: String,
     pub request_type: RequestType,

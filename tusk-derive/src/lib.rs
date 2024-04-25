@@ -6,6 +6,39 @@ use proc_macro::TokenStream;
 use quote::{format_ident, ToTokens};
 use syn::{parse_macro_input, ItemFn, ItemStruct};
 
+/// This macro is used to define a route. It takes in a request type and a route name.
+///
+/// The arguments are:
+/// `#[route(Method Path {: secure_fn (optional)})]`
+///
+/// Valild methods are:
+/// - `Get`
+/// - `Post`
+/// - `Put`
+/// - `Delete`
+/// - `Patch`
+///
+/// If this route is registered using the `Server::module` function,
+/// the path provided will be prepended to the path provided in the macro.
+/// 
+/// This macro should be applied to a function with arguments for:
+/// - [`Request`]
+/// - [`DatabaseConnection`]
+/// - `T`, where `T` is the type provided by treatment function.
+///   for more information, see the `tusk_rs::Server` documentation
+///
+/// It should return a `Result<Response, RouteError>`.
+///
+/// The route macro all supports security middleware by
+/// adding `: your_secure_fn` to the end of the macro.
+/// The secure function should be an async function
+/// with arguments for:
+/// - [`Request`]
+/// - [`DatabaseConnection`]
+/// - `T`
+/// and should return `Result<(Request, DatabaseConnection, T), RouteError>`.
+/// Returning an Ok value allows the route to continue, while
+/// returning an Err value will return the error to the client.
 #[proc_macro_attribute]
 pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     let params = args
@@ -72,6 +105,10 @@ pub fn route(args: TokenStream, input: TokenStream) -> TokenStream {
     .into()
 }
 
+/// This macro is used to define a treatment function.
+/// The function is almost the same as the [`route`] macro, but it should
+/// return a tuple of the response, the request, and the database connection
+/// instead of a Response.
 #[proc_macro_attribute]
 pub fn treatment(_args: TokenStream, input: TokenStream) -> TokenStream {
     let data = parse_macro_input!(input as ItemFn);
@@ -365,6 +402,13 @@ pub fn derive_postgres_writeable(item: TokenStream) -> TokenStream {
         }
     }.into()
 }
+
+/// Embed a file into the binary as a string.
+/// This is useful for HTML files or other static files
+/// that need to be represented as a string.
+/// 
+/// The path is derived relative to the project root, which makes
+/// it easier to import from /static, /public, or other directories.
 #[proc_macro]
 pub fn embed(item: TokenStream) -> TokenStream {
     let path = item.to_string().replace('\"', "");
@@ -373,5 +417,22 @@ pub fn embed(item: TokenStream) -> TokenStream {
     let contents_string = String::from_utf8(contents).unwrap();
     quote! {
         #contents_string
+    }.into()
+}
+
+/// Embed a file into the binary as a byte array.
+/// This is useful for binary files that need to be represented
+/// as a byte array.
+///
+/// This is similar to [`std::core::include_bytes`], but the path
+/// is derived relative to the project root, which makes it easier
+/// to import from /static, /public, or other directories.
+#[proc_macro]
+pub fn embed_binary(item: TokenStream) -> TokenStream {
+    let path = item.to_string().replace('\"', "");
+    let resolved_path = std::fs::canonicalize(path).expect("Invalid path!");
+    let contents = std::fs::read(&resolved_path).unwrap_or_else(|_| panic!("Could not read contents at {}", resolved_path.display()));
+    quote! {
+        &[#(#contents),*]
     }.into()
 }

@@ -71,7 +71,7 @@ impl DatabaseConfig {
 	/// ```
 	/// use tusk_rs::config::DatabaseConfig;
 	///
-	/// DatabaseConfig::new().username("username").password("password")
+	/// DatabaseConfig::new().username("username").password("password").database("database")
 	/// ```
 	pub fn database<T: AsRef<str>>(mut self, database: T) -> DatabaseConfig {
 		self.database = database.as_ref().to_string();
@@ -85,7 +85,7 @@ impl DatabaseConfig {
 	/// ```
 	/// use tusk_rs::config::DatabaseConfig;
 	///
-	/// DatabaseConfig::new().username("username").password("password")
+	/// DatabaseConfig::new().username("username").password("password").ssl(true)
 	/// ```
 	pub fn ssl(mut self, ssl: bool) -> DatabaseConfig {
 		self.ssl = ssl;
@@ -99,7 +99,7 @@ impl DatabaseConfig {
 	/// ```
 	/// use tusk_rs::config::DatabaseConfig;
 	///
-	/// DatabaseConfig::new().username("username").password("password")
+	/// DatabaseConfig::new().username("username").password("password").port(5432)
 	/// ```
 	pub fn port(mut self, port: i32) -> DatabaseConfig {
 		self.port = port;
