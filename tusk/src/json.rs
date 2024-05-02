@@ -278,7 +278,7 @@ impl JsonArray {
     /// Silently drops any invalid children.
     pub fn map_drop<T: JsonRetrieve>(&self) -> Vec<T> {
         if self.values.is_empty() {
-            return Ok(Vec::new());
+            return Vec::new();
         }
         let mut build = Vec::new();
         for i in 0..self.values.len() {
@@ -287,7 +287,7 @@ impl JsonArray {
                 build.push(val);
             }
         }
-        Ok(build)
+        build
     }
 }
 impl Default for JsonArray {
