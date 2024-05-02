@@ -272,6 +272,23 @@ impl JsonArray {
         }
         Ok(build)
     }
+
+    /// Converts all elements of this JSONArray
+    /// to a type that implements JsonRetrieve.
+    /// Silently drops any invalid children.
+    pub fn map_drop<T: JsonRetrieve>(&self) -> Result<Vec<T>, JsonParseError> {
+        if self.values.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut build = Vec::new();
+        for i in 0..self.values.len() {
+            let value = &self.values[i];
+            if let Ok(val) = T::parse(i.to_string(), Some(value)) {
+                build.push(val);
+            }
+        }
+        Ok(build)
+    }
 }
 impl Default for JsonArray {
     fn default() -> Self {
