@@ -232,7 +232,7 @@ impl DatabaseConnection {
                     temp_table,
                     T::joins().as_syntax(&temp_table)
                 ),
-                [&args, insert_a.as_slice()].concat().as_slice(),
+                [args, insert_a.as_slice()].concat().as_slice(),
             )
             .await?
             .iter()
