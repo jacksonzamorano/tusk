@@ -276,7 +276,7 @@ impl JsonArray {
     /// Converts all elements of this JSONArray
     /// to a type that implements JsonRetrieve.
     /// Silently drops any invalid children.
-    pub fn map_drop<T: JsonRetrieve>(&self) -> Result<Vec<T>, JsonParseError> {
+    pub fn map_drop<T: JsonRetrieve>(&self) -> Vec<T> {
         if self.values.is_empty() {
             return Ok(Vec::new());
         }
