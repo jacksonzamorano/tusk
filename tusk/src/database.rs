@@ -13,6 +13,7 @@ use crate::{
 #[derive(Clone)]
 pub struct Database {
     pool: Pool,
+    debug: bool,
 }
 
 impl Database {
@@ -29,10 +30,10 @@ impl Database {
             let _ = builder.set_ca_file("/etc/ssl/cert.pem");
             let connector = MakeTlsConnector::new(builder.build());
             let pool = cfg.create_pool(None, connector).ok()?;
-            Some(Database { pool })
+            Some(Database { pool, debug: config.debug })
         } else {
             let pool = cfg.create_pool(None, NoTls).ok()?;
-            Some(Database { pool })
+            Some(Database { pool, debug: config.debug })
         }
     }
 
@@ -40,6 +41,7 @@ impl Database {
     pub async fn get_connection(&self) -> Result<DatabaseConnection, deadpool_postgres::PoolError> {
         Ok(DatabaseConnection {
             cn: self.pool.get().await?,
+            debug: self.debug,
         })
     }
 }
@@ -122,6 +124,7 @@ impl From<tokio_postgres::Error> for PostgresWriteError {
 
 pub struct DatabaseConnection {
     cn: Object,
+    debug: bool,
 }
 impl DatabaseConnection {
     pub async fn query<T: AsRef<str>>(
@@ -129,6 +132,10 @@ impl DatabaseConnection {
         query: T,
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<Vec<Row>, tokio_postgres::Error> {
+        if self.debug {
+            println!("[DEBUG: QUERY] {}", query.as_ref());
+            println!("[DEBUG: ARGS] Args: {:?}", args);
+        }
         self.cn.query(query.as_ref(), args).await
     }
 
@@ -137,6 +144,10 @@ impl DatabaseConnection {
         query: &str,
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<Vec<T>, PostgresReadError> {
+        if self.debug {
+            println!("[DEBUG: QUERY] (select_all) SELECT {} FROM {} {} {}", T::read_fields().as_syntax(T::table_name()), T::table_name(), T::joins().iter().map(|j| j.to_read(T::table_name())).collect::<Vec<String>>().join(" "), query);
+            println!("[DEBUG: ARGS] (select_all) Args: {:?}", args);
+        }
         Ok(self
             .cn
             .query(
@@ -160,6 +171,14 @@ impl DatabaseConnection {
         query: &str,
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<T, PostgresReadError> {
+        if self.debug {
+            println!("[DEBUG: QUERY] (select_one) SELECT {} FROM {} {} {}",
+                    T::read_fields().as_syntax(T::table_name()),
+                    T::table_name(),
+                    T::joins().iter().map(|j| j.to_read(T::table_name())).collect::<Vec<String>>().join(" "),
+                    query);
+            println!("[DEBUG: ARGS] (select_one) Args: {:?}", args);
+        }
         self
             .cn
             .query(
@@ -184,6 +203,10 @@ impl DatabaseConnection {
         write: PostgresWrite,
     ) -> Result<T, PostgresWriteError> {
         let (insert_q, insert_a) = write.into_insert(T::table_name());
+        if self.debug {
+            println!("[DEBUG: QUERY] (insert) {} RETURNING {}", insert_q, T::read_fields().as_syntax(T::table_name()));
+            println!("[DEBUG: ARGS] (insert) Args: {:?}", insert_a);
+        }
         Ok(self
             .cn
             .query(&format!("{} RETURNING {}", insert_q, T::read_fields().as_syntax(T::table_name())), insert_a.as_slice())
@@ -204,6 +227,10 @@ impl DatabaseConnection {
         }
         let temp_table = format!("write_{}", T::table_name());
         let join_str = if !T::joins().is_empty() { T::joins().as_syntax(&temp_table) } else { "".to_string() };
+        if self.debug {
+            println!("[DEBUG: QUERY] (insert_vec) WITH {} AS ({} RETURNING *) SELECT {} FROM {} {}", temp_table, insert_q, T::read_fields().as_syntax(&temp_table), temp_table, join_str);
+            println!("[DEBUG: ARGS] (insert_vec) Args: {:?}", insert_a);
+        }
         Ok(self
             .cn
             .query(&format!("WITH {} AS ({} RETURNING *) SELECT {} FROM {} {}", temp_table, insert_q, T::read_fields().as_syntax(&temp_table), temp_table, join_str), insert_a.as_slice())
@@ -221,6 +248,10 @@ impl DatabaseConnection {
     ) -> Result<T, PostgresWriteError> {
         let temp_table = format!("write_{}", T::table_name());
         let (insert_q, insert_a) = write.into_update(T::table_name(), args.len());
+        if self.debug {
+            println!("[DEBUG: QUERY] (update) WITH {} AS ({} WHERE {} RETURNING *) SELECT {} FROM {} {}", temp_table, insert_q, condition, T::read_fields().as_syntax(&temp_table), temp_table, T::joins().as_syntax(&temp_table));
+            println!("[DEBUG: ARGS] (update) Args: {:?}", [args, insert_a.as_slice()].concat());
+        }
         let next = self
             .cn
             .query(
@@ -247,6 +278,10 @@ impl DatabaseConnection {
         args: &[&(dyn ToSql + Sync)],
     ) -> Result<T, PostgresWriteError> {
         let temp_table = format!("write_{}", T::table_name());
+        if self.debug {
+            println!("[DEBUG: QUERY] (update_set) WITH {} AS (UPDATE {} SET {} RETURNING *) SELECT {} FROM {} {}", temp_table, T::table_name(), query, T::read_fields().as_syntax(&temp_table), temp_table, T::joins().as_syntax(&temp_table));
+            println!("[DEBUG: ARGS] (update_set) Args: {:?}", args);
+        }
         Ok(self
             .cn
             .query(
@@ -268,6 +303,10 @@ impl DatabaseConnection {
     }
 
     pub async fn delete<T: PostgresTable>(&self, condition: &str, args: &[&(dyn ToSql + Sync)]) {
+        if self.debug {
+            println!("[DEBUG: QUERY] (delete) DELETE FROM {} {}", T::table_name(), condition);
+            println!("[DEBUG: ARGS] (delete) Args: {:?}", args);
+        }
         let _ = self.cn.query(
             &format!("DELETE FROM {} {}", T::table_name(), condition),
             args,

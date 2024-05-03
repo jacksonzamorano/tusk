@@ -5,7 +5,8 @@ pub struct DatabaseConfig {
 	pub username: String,
 	pub password: String,
 	pub database: String,
-	pub ssl: bool
+	pub ssl: bool,
+    pub debug: bool,
 }
 impl DatabaseConfig {
 	/// Creates a new database connection config.
@@ -18,7 +19,8 @@ impl DatabaseConfig {
 			username: "postgres".to_string(),
 			password: String::new(),
 			database: "postgres".to_string(),
-			ssl: false
+			ssl: false,
+            debug: false,
 		}
 	}
 
@@ -105,6 +107,20 @@ impl DatabaseConfig {
 		self.port = port;
 		self
 	}
+
+    /// Define whether debug mode should be used. Can be chained.
+    /// 
+    /// # Examples
+    ///
+    /// ```
+    /// use tusk_rs::config::DatabaseConfig;
+    ///
+    /// DatabaseConfig::new().username("username").password("password").debug(true)
+    /// ```
+    pub fn debug(mut self, debug: bool) -> DatabaseConfig {
+        self.debug = debug;
+        self
+    }
 }
 impl Default for DatabaseConfig {
 	fn default() -> Self {
