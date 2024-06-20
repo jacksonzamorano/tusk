@@ -6,6 +6,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 
+use brackets::JsonParseError;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -404,3 +405,12 @@ type AsyncTreatmentHandler<T, V> = Box<
         Rc<V>
     ) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::DatabaseConnection), RouteError>>>>,
 >;
+
+impl From<JsonParseError> for RouteError {
+    fn from(val: JsonParseError) -> Self {
+        match val {
+            JsonParseError::NotFound(k) => RouteError::bad_request(&format!("Key {} not found", k)),
+            JsonParseError::InvalidType(k, t) => RouteError::bad_request(&format!("Key {} expected type {}", k, t)),
+        }
+    }
+}
