@@ -87,9 +87,9 @@ dependencies = [
 
 [[package]]
 name = "brackets"
-version = "0.1.8"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f5e9901ca74e6241614c652971554ce8e04fadd0f8812afb7c9188b05f1ee2b"
+checksum = "fa67ddefe01f507a732e9407608e7f4977a2cae7e567745fdb1e2f7e2c22e6b0"
 dependencies = [
  "brackets-macros",
  "chrono",
@@ -97,9 +97,9 @@ dependencies = [
 
 [[package]]
 name = "brackets-macros"
-version = "0.1.8"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0afbfac07392052502e0ce3b3313846ddbf051e4019a371a512340ff4af3d66"
+checksum = "7ac3b7a41cc09aa9c3a68d255502fb385187fa8c963f128c5858ac2a9072259a"
 dependencies = [
  "quote",
  "syn",
