@@ -19,7 +19,8 @@ pub use tokio_postgres::{error::SqlState, types::ToSql, Row};
 pub use route_module::*;
 pub use urlencoded::{FromUrlEncoded, UrlEncoded};
 
-/// Re-exports chrono for convience
+/// Re-exports for convience
 pub use chrono;
 pub use tusk_rs_derive::*;
 pub use uuid;
+pub use tokio;

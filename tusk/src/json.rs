@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use std::{
     collections::HashMap,
     str::{Chars, FromStr},
@@ -580,10 +581,6 @@ impl ToJson for Uuid {
     }
 }
 
-#[cfg(feature = "chrono")]
-use chrono::{DateTime, Utc};
-
-#[cfg(feature = "chrono")]
 impl JsonRetrieve for DateTime<Utc> {
     fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
         if let Some(v) = value {
@@ -596,7 +593,6 @@ impl JsonRetrieve for DateTime<Utc> {
     }
 }
 
-#[cfg(feature = "chrono")]
 impl ToJson for DateTime<Utc> {
     fn to_json(&self) -> String {
         format!("\"{}\"", self.to_rfc3339())
