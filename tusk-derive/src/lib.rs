@@ -36,6 +36,7 @@ use syn::{parse_macro_input, ItemFn, ItemStruct};
 /// - [`Request`]
 /// - [`DatabaseConnection`]
 /// - `T`
+///
 /// and should return `Result<(Request, DatabaseConnection, T), RouteError>`.
 /// Returning an Ok value allows the route to continue, while
 /// returning an Err value will return the error to the client.
