@@ -86,26 +86,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "brackets"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15a34329008b5ec8942d1d2f6584e711c4d9006d4b1d9c166e52546ea841ff68"
-dependencies = [
- "brackets-macros",
- "chrono",
-]
-
-[[package]]
-name = "brackets-macros"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8e7fdd8ecce7416b092255052104d507f797ddbbf3dc4b10d65fe8440dd3715"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -879,8 +859,6 @@ dependencies = [
 name = "tusk-rs"
 version = "0.0.0"
 dependencies = [
- "brackets",
- "brackets-macros",
  "chrono",
  "deadpool-postgres",
  "openssl",

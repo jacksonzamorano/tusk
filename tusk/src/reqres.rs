@@ -1,4 +1,4 @@
-use brackets::{ToJson, JsonArray, JsonObject};
+use crate::json::{ToJson, JsonArray, JsonObject};
 use chrono::{Utc, Datelike, Timelike};
 use crate::UrlEncoded;
 
@@ -10,8 +10,8 @@ use std::{collections::{HashMap, BTreeMap}, fmt::{Display, Formatter}, matches};
 /// Body data can be extracted is several different types by 
 /// accessing `body`. See more details in [`BodyContents`].
 #[derive(Debug)]
-pub struct Request {
-    pub request_type: RequestType,
+pub struct RequestParameters {
+    pub request_type: HttpMethod,
     pub path: String,
     pub query: HashMap<String, String>,
     pub headers: HashMap<String, String>,
@@ -473,7 +473,7 @@ impl BodyContents {
 
 #[derive(Debug)]
 #[derive(PartialEq)]
-pub enum RequestType {
+pub enum HttpMethod {
     Get,
     Post,
     Put,
@@ -483,7 +483,7 @@ pub enum RequestType {
     Options,
 }
 
-impl RequestType {
+impl HttpMethod {
     const GET_TYPE: &'static str = "GET";
     const POST_TYPE: &'static str = "POST";
     const PATCH_TYPE: &'static str = "PATCH";
@@ -492,32 +492,32 @@ impl RequestType {
     const ANY_TYPE: &'static str = "ANY";
     const OPTIONS_TYPE: &'static str = "OPTIONS";
 
-    pub fn type_for_method(method: &str) -> RequestType {
+    pub fn type_for_method(method: &str) -> HttpMethod {
         match method {
-            RequestType::GET_TYPE => RequestType::Get,
-            RequestType::POST_TYPE => RequestType::Post,
-            RequestType::PUT_TYPE => RequestType::Put,
-            RequestType::PATCH_TYPE => RequestType::Patch,
-            RequestType::DELETE_TYPE => RequestType::Delete,
-            RequestType::OPTIONS_TYPE => RequestType::Options,
-            _ => RequestType::Any,
+            HttpMethod::GET_TYPE => HttpMethod::Get,
+            HttpMethod::POST_TYPE => HttpMethod::Post,
+            HttpMethod::PUT_TYPE => HttpMethod::Put,
+            HttpMethod::PATCH_TYPE => HttpMethod::Patch,
+            HttpMethod::DELETE_TYPE => HttpMethod::Delete,
+            HttpMethod::OPTIONS_TYPE => HttpMethod::Options,
+            _ => HttpMethod::Any,
         }
     }
 
     pub fn is_any(&self) -> bool {
-        matches!(self, RequestType::Any)
+        matches!(self, HttpMethod::Any)
     }
 }
-impl Display for RequestType {
+impl Display for HttpMethod {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", match self {
-            RequestType::Get => RequestType::GET_TYPE.to_string(),
-            RequestType::Post => RequestType::POST_TYPE.to_string(),
-            RequestType::Put => RequestType::PUT_TYPE.to_string(),
-            RequestType::Delete => RequestType::DELETE_TYPE.to_string(),
-            RequestType::Patch => RequestType::PATCH_TYPE.to_string(),
-            RequestType::Any => RequestType::ANY_TYPE.to_string(),
-            RequestType::Options => RequestType::OPTIONS_TYPE.to_string()
+            HttpMethod::Get => HttpMethod::GET_TYPE.to_string(),
+            HttpMethod::Post => HttpMethod::POST_TYPE.to_string(),
+            HttpMethod::Put => HttpMethod::PUT_TYPE.to_string(),
+            HttpMethod::Delete => HttpMethod::DELETE_TYPE.to_string(),
+            HttpMethod::Patch => HttpMethod::PATCH_TYPE.to_string(),
+            HttpMethod::Any => HttpMethod::ANY_TYPE.to_string(),
+            HttpMethod::Options => HttpMethod::OPTIONS_TYPE.to_string()
         })
     }
 }

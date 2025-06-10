@@ -1,12 +1,12 @@
-use super::{BodyContents, Request, RequestType, Response, ResponseStatusCode, RouteError};
-use crate::DatabaseConnection;
+use super::{
+    BodyContents, RequestParameters, HttpMethod, Response, ResponseStatusCode, RouteError,
+};
+use crate::route_module::{RouteBlock, RouteModule};
 use crate::{config::DatabaseConfig, database::Database};
+use crate::{ModernRouteHandler, Request, Route, RouteStorage};
 use std::collections::HashMap;
 use std::future::Future;
-use std::pin::Pin;
-use std::rc::Rc;
-
-use brackets::JsonParseError;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -15,41 +15,34 @@ use tokio::net::{TcpListener, TcpStream};
 ///
 /// Server accepts a generic type `T`. This type is injected
 /// into all routes as the final argument.
-pub struct Server<T, V> {
-    routes: RouteStorage<T>,
+pub struct Server<V> {
+    routes: RouteStorage<V>,
     listener: TcpListener,
     database: Database,
-    treatment: AsyncTreatmentHandler<T, V>,
     postfix: Option<fn(Response) -> Response>,
     cors_origin: String,
     cors_headers: String,
     debugging_enabled: bool,
-    initialization_data: std::rc::Rc<V>
+    configuration: Arc<V>,
 }
-impl<T: 'static, V: 'static> Server<T, V> {
+impl<V: 'static> Server<V> {
     /// Create a new server.
     /// Specify a port, [`DatabaseConfig`], and an async
     /// function with arguments [`Request`] and a PostgresConn
     /// (alias for [`Object`]) and returns `T`.
-    pub async fn new(
-        port: i32,
-        database: DatabaseConfig,
-        treatment: AsyncTreatmentHandler<T, V>,
-        initialization_data: V,
-    ) -> Server<T, V> {
+    pub async fn new(port: i32, database: DatabaseConfig, configuration: V) -> Server<V> {
         Server {
-            routes: RouteStorage::new(),
+            routes: RouteStorage::<V>::new(),
             listener: TcpListener::bind(format!("127.0.0.1:{}", port))
                 .await
                 .unwrap(),
             database: Database::new(database).await.unwrap(),
-            treatment,
             postfix: None,
             cors_origin: "*".to_string(),
             cors_headers: "Origin, X-Requested-With, Content-Type, Accept, Authorization"
                 .to_string(),
             debugging_enabled: false,
-            initialization_data: Rc::new(initialization_data),
+            configuration: Arc::new(configuration),
         }
     }
 
@@ -69,32 +62,39 @@ impl<T: 'static, V: 'static> Server<T, V> {
     /// for peformance when `start` is called.
     ///
     /// See [`Server::register`] for a better way to register routes.
-    pub fn register(&mut self, r: Route<T>) {
-        self.routes.add(r);
+    pub fn register<H, Fut>(&mut self, method: HttpMethod, path: &str, f: H)
+    where
+        H: Fn(Request<V>) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<Response, RouteError>> + Send + 'static,
+    {
+        self.routes.add(Route::new(
+            path.to_string(),
+            method,
+            Box::new(move |req| Box::pin(f(req))),
+        ));
     }
     /// Register many [`Route`]s at once. Routes should NOT be registered
     /// after calling `Server::start`, as all routes are sorted
     /// for peformance when `start` is called.
-    /// 
+    ///
     /// The recommended pattern for this is to break out
     /// related routes into their own module and decorate
     /// each route with #[route], then export a module function
     /// which returns a Vec of all the routes within.
     /// Note that this has no effect on performance, this just
     /// keeps your code organized.
-    pub fn module(&mut self, prefix: &str, rs: Vec<Route<T>>) {
-        let mut applied_prefix = if prefix.ends_with('/') {
+    pub fn module<T: RouteModule<V>>(&mut self, prefix: &str, module: T) {
+        let applied_prefix = if prefix.ends_with('/') {
             prefix[0..prefix.len()].to_string()
         } else {
             prefix.to_string()
         };
-        applied_prefix = if !applied_prefix.starts_with('/') {
-            format!("/{}", applied_prefix)
-        } else {
-            applied_prefix
+        let mut block = RouteBlock {
+            routes: Vec::new(),
+            prefix: applied_prefix,
         };
-        for mut r in rs {
-            r.path = format!("{}{}", applied_prefix, r.path);
+        module.apply(&mut block);
+        for r in block.routes {
             self.routes.add(r);
         }
     }
@@ -113,15 +113,15 @@ impl<T: 'static, V: 'static> Server<T, V> {
 
     /// Prepares Tusk for serving applications
     /// and then begins listening.
-    pub async fn start(&mut self) {
+    pub async fn start(mut self) {
+        let default_route: ModernRouteHandler<V> =
+            Box::new(move |req| Box::pin(Server::default_error(req)));
         self.routes.prep();
-        let default: AsyncRouteHandler<T> =
-            Box::new(move |a, b, c| Box::pin(Server::<T,V>::default_error(a, b, c)));
         loop {
             if let Ok(conn) = self.listener.accept().await {
                 let (mut req_stream, _) = conn;
                 let req_parsed = self.create_request_object(&mut req_stream).await;
-                if req_parsed.request_type == RequestType::Options {
+                if req_parsed.request_type == HttpMethod::Options {
                     let mut bytes = Vec::new();
                     let body = self.handle_options();
                     bytes.append(&mut body.get_header_data());
@@ -129,7 +129,7 @@ impl<T: 'static, V: 'static> Server<T, V> {
                     _ = req_stream.write(&bytes).await;
                     continue;
                 }
-                let mut matched_path: &AsyncRouteHandler<T> = &default;
+                let mut matched_path: &ModernRouteHandler<V> = &default_route;
                 if let Some(handler) = self
                     .routes
                     .handler(&req_parsed.request_type, &req_parsed.path)
@@ -137,25 +137,16 @@ impl<T: 'static, V: 'static> Server<T, V> {
                     matched_path = &handler.handler;
                 }
 
-                let mut req = IncomingRequest {
-                    request: req_parsed,
-                    stream: req_stream,
-                };
                 let mut bytes = Vec::new();
-                let initialization_data = self.initialization_data.clone();
                 let mut response = match self.database.get_connection().await {
-                    Ok(db_inst) => match (self.treatment)(req.request, db_inst, initialization_data).await {
-                        Ok((treat, req, obj)) => {
-                            let mut body = matched_path(req, obj, treat)
-                                .await
-                                .unwrap_or_else(|x| x.to_response());
-                            if self.postfix.is_some() {
-                                body = self.postfix.unwrap()(body)
-                            }
-                            body
-                        }
-                        Err(error) => error.to_response(),
-                    },
+                    Ok(db_inst) => {
+                        let data = Request {
+                            database: db_inst,
+                            parameters: req_parsed,
+                            configuration: self.configuration.clone(),
+                        };
+                        matched_path(data).await.unwrap_or_else(|x| x.to_response())
+                    }
                     Err(err) => {
                         if self.debugging_enabled {
                             dbg!(err);
@@ -170,7 +161,7 @@ impl<T: 'static, V: 'static> Server<T, V> {
                 let mut write_bytes = bytes.as_slice();
                 // Write stream
                 loop {
-                    let written_bytes = req.stream.write(write_bytes).await;
+                    let written_bytes = req_stream.write(write_bytes).await;
                     if let Ok(wr_byt) = written_bytes {
                         if wr_byt == write_bytes.len() {
                             break;
@@ -184,7 +175,7 @@ impl<T: 'static, V: 'static> Server<T, V> {
         }
     }
 
-    async fn create_request_object(&self, stream: &mut TcpStream) -> Request {
+    async fn create_request_object(&self, stream: &mut TcpStream) -> RequestParameters {
         let mut buffer = BufReader::new(stream);
         let mut headers_content = String::new();
 
@@ -217,13 +208,13 @@ impl<T: 'static, V: 'static> Server<T, V> {
         let path = head_path.split('?').collect::<Vec<&str>>();
         let wo_query_sect = path[0].to_string();
 
-        let mut created_request = Request {
+        let mut created_request = RequestParameters {
             path: if wo_query_sect.ends_with('/') {
                 wo_query_sect[0..wo_query_sect.len() - 1].to_string()
             } else {
                 wo_query_sect.to_string()
             },
-            request_type: RequestType::type_for_method(head[0]),
+            request_type: HttpMethod::type_for_method(head[0]),
             query: if let Some(q_d) = path.get(1) {
                 q_d.split('&')
                     .map(|x| {
@@ -268,7 +259,7 @@ impl<T: 'static, V: 'static> Server<T, V> {
         created_request
     }
 
-    async fn default_error(_: Request, _: DatabaseConnection, _: T) -> Result<Response, RouteError> {
+    async fn default_error(_: Request<V>) -> Result<Response, RouteError> {
         Ok(Response::string("404 not found").status(ResponseStatusCode::NotFound))
     }
 
@@ -276,141 +267,5 @@ impl<T: 'static, V: 'static> Server<T, V> {
         let mut r = Response::data(Vec::new());
         r.apply_cors(&self.cors_origin, &self.cors_headers);
         r
-    }
-}
-
-/// A wrapper for a route.
-///
-/// This struct is created by the `#[route(METHOD path)]` macro,
-/// when a function is decorated with that macro, the function is
-/// rewritten such that it returns the Route.
-///
-/// Manually creating this struct is not recommended.
-/// use the [`tusk_rs_derive::route`] macro instead.
-pub struct Route<T> {
-    pub path: String,
-    pub request_type: RequestType,
-    pub handler: AsyncRouteHandler<T>,
-}
-impl<T> Route<T> {
-    /// A route can be manually created, but it is not
-    /// recommended.
-    pub fn new(path: String, request_type: RequestType, handler: AsyncRouteHandler<T>) -> Route<T> {
-        Route {
-            path: {
-                let mut s_path = path;
-                if !s_path.starts_with('/') {
-                    s_path = format!("/{}", s_path)
-                }
-                if s_path.ends_with('/') {
-                    s_path = s_path[0..s_path.len() - 1].to_string();
-                }
-                s_path
-            },
-            request_type,
-            handler,
-        }
-    }
-}
-impl<T> core::fmt::Debug for Route<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Route")
-            .field("path", &self.path)
-            .field("request_type", &self.request_type)
-            .finish()
-    }
-}
-
-#[derive(Debug)]
-pub struct IncomingRequest {
-    pub request: Request,
-    pub stream: TcpStream,
-}
-
-struct RouteStorage<T> {
-    routes_get: Vec<Route<T>>,
-    routes_post: Vec<Route<T>>,
-    routes_put: Vec<Route<T>>,
-    routes_patch: Vec<Route<T>>,
-    routes_delete: Vec<Route<T>>,
-    routes_any: Vec<Route<T>>,
-}
-
-impl<T> RouteStorage<T> {
-    fn new() -> RouteStorage<T> {
-        RouteStorage {
-            routes_get: Vec::new(),
-            routes_post: Vec::new(),
-            routes_put: Vec::new(),
-            routes_patch: Vec::new(),
-            routes_delete: Vec::new(),
-            routes_any: Vec::new(),
-        }
-    }
-
-    fn handler(&self, request_type: &RequestType, path: &String) -> Option<&Route<T>> {
-        let handler_cat = match request_type {
-            RequestType::Get => &self.routes_get,
-            RequestType::Post => &self.routes_post,
-            RequestType::Put => &self.routes_put,
-            RequestType::Patch => &self.routes_patch,
-            RequestType::Delete => &self.routes_delete,
-            _ => &self.routes_any,
-        };
-        if let Ok(handler_ix) = handler_cat.binary_search_by(|a| a.path.cmp(path)) {
-            Some(&handler_cat[handler_ix])
-        } else if !request_type.is_any() {
-            let any_ix = self
-                .routes_any
-                .binary_search_by(|a| a.path.cmp(path))
-                .ok()?;
-            Some(&self.routes_any[any_ix])
-        } else {
-            None
-        }
-    }
-    fn add(&mut self, route: Route<T>) {
-        let handler_cat = match route.request_type {
-            RequestType::Get => &mut self.routes_get,
-            RequestType::Post => &mut self.routes_post,
-            RequestType::Put => &mut self.routes_put,
-            RequestType::Patch => &mut self.routes_patch,
-            RequestType::Delete => &mut self.routes_delete,
-            _ => &mut self.routes_any,
-        };
-        handler_cat.push(route);
-    }
-
-    fn prep(&mut self) {
-        self.routes_get.sort_by(|a, b| a.path.cmp(&b.path));
-        self.routes_post.sort_by(|a, b| a.path.cmp(&b.path));
-        self.routes_put.sort_by(|a, b| a.path.cmp(&b.path));
-        self.routes_patch.sort_by(|a, b| a.path.cmp(&b.path));
-        self.routes_delete.sort_by(|a, b| a.path.cmp(&b.path));
-        self.routes_any.sort_by(|a, b| a.path.cmp(&b.path));
-    }
-}
-
-type AsyncRouteHandler<T> = Box<
-    fn(
-        Request,
-        crate::DatabaseConnection,
-        T,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, RouteError>>>>,
->;
-type AsyncTreatmentHandler<T, V> = Box<
-    fn(
-        Request,
-        crate::DatabaseConnection,
-        Rc<V>
-    ) -> Pin<Box<dyn Future<Output = Result<(T, Request, crate::DatabaseConnection), RouteError>>>>,
->;
-
-impl From<JsonParseError> for RouteError {
-    fn from(val: JsonParseError) -> Self {
-        match val {
-            JsonParseError::NotFound(k) => RouteError::bad_request(&format!("Key {} not found", k)),
-            JsonParseError::InvalidType(k, t) => RouteError::bad_request(&format!("Key {} expected type {}", k, t)),
-        }
     }
 }

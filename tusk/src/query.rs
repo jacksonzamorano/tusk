@@ -36,6 +36,8 @@ pub enum FromPostgresError {
 /// A struct that defines how Tusk should join
 /// tables for you.
 pub struct PostgresJoin {
+    /// The name of the join. Must be used in foreign_as references!
+    pub join_name: &'static str,
     /// The type of join to perform. Examples are INNER JOIN, LEFT JOIN, etc.
     pub join_type: &'static str,
     /// The table to join.
@@ -50,12 +52,12 @@ pub struct PostgresJoin {
 impl PostgresJoin {
     /// Converts the join to a read statement.
     pub fn to_read(&self, local_table: &str) -> String {
-        format!("{} {} ON {}.{} {} {}.{}", self.join_type, self.table, local_table, self.local_field, self.condition, self.table, self.foreign_field)
+        format!("{} {} {} ON {}.{} {} {}.{}", self.join_type, self.table, self.join_name, local_table, self.local_field, self.condition, self.join_name, self.foreign_field)
     }
     /// Tusk returns the insertered or updated row(s),
     /// so this converts the join to a write statement.
     pub fn to_write(&self, local_table: &str) -> String {
-        format!("FROM {} WHERE {}.{} {} {}.{}", self.table, local_table, self.local_field, self.condition, self.table, self.foreign_field)
+        format!("FROM {} {} WHERE {}.{} {} {}.{}", self.table, local_table, self.join_name, self.local_field, self.condition, self.join_name, self.foreign_field)
     }
 }
 

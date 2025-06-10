@@ -1,32 +1,47 @@
-use models::{RouteData};
-use tusk_rs::{DatabaseConfig, Request, RouteError, DatabaseConnection, Response};
-use tusk_rs_derive::{treatment, ToJson, embed_binary, route, PostgresJoins};
+use std::env;
+
+use status::StatusModule;
+use tusk_rs::{DatabaseConfig, HttpMethod, Request, Response, RouteError, Server};
+use user::UserModule;
 mod models;
+mod status;
+mod user;
 mod util;
 
-pub const PDF_DATA: &[u8] = embed_binary!("test.pdf");
-
-#[derive(Debug, ToJson, PostgresJoins)]
-pub struct User {
-    email: String,
+pub struct ApplicationConfig {
+    is_production: bool,
 }
 
-#[route(Get /pdf)]
-pub async fn pdf(_req: Request, _db: DatabaseConnection, _params: RouteData) -> Result<Response, RouteError> {
-    Ok(Response::data(PDF_DATA.to_vec()).header("Content-Type", "application/pdf"))
-}
+type AppRequest = Request<ApplicationConfig>;
 
-#[treatment]
-pub async fn treat_user_data(_req: Request, db: DatabaseConnection, params: std::rc::Rc<User>) -> RouteData {
-    dbg!(&params);
-    RouteData {}
+async fn index(data: AppRequest) -> Result<Response, RouteError> {
+    let contents = if data.configuration.is_production {
+        "production"
+    } else {
+        "development"
+    };
+
+    return Ok(Response::string(contents));
 }
 
 #[tokio::main]
 async fn main() {
-    let config = DatabaseConfig::new();
-    let mut server = tusk_rs::Server::new(9000, config, treat_user_data(), User { email: String::new() }).await;
-    server.register(pdf());
+    let config = DatabaseConfig::new()
+        .username(env::var("DATABASE_USERNAME").unwrap())
+        .password(env::var("DATABASE_PASSWORD").unwrap())
+        .host(env::var("DATABASE_HOST").unwrap())
+        .database(env::var("DATABASE_NAME").unwrap());
+    let mut server = Server::new(
+        9000,
+        config,
+        ApplicationConfig {
+            is_production: true,
+        },
+    )
+    .await;
+    server.register(HttpMethod::Get, "/", index);
+    server.module("status", StatusModule {});
+    server.module("users", UserModule {});
     server.set_cors(
         "*",
         "Origin, X-Requested-With, Content-Type, Accept, Authorization",
