@@ -1,5 +1,6 @@
 use std::env;
 
+use postgres_types::ToSql;
 use status::StatusModule;
 use tusk_rs::{DatabaseConfig, HttpMethod, Request, Response, RouteError, Server};
 use user::UserModule;
@@ -7,6 +8,14 @@ mod models;
 mod status;
 mod user;
 mod util;
+
+#[derive(Debug, ToSql)]
+#[postgres(rename_all = "snake_case")]
+pub enum ApplicationEnvironment {
+    Development,
+    Production,
+    StagingDeploy
+}
 
 pub struct ApplicationConfig {
     is_production: bool,
