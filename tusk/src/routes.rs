@@ -48,8 +48,9 @@ pub struct Request<V> {
 
     pub configuration: Arc<V>,
 }
+pub type Reply = Result<Response, RouteError>;
 pub type ModernRouteHandler<V> = Box<
-    dyn Fn(Request<V>) -> Pin<Box<dyn Future<Output = Result<Response, RouteError>>>> + Send + Sync,
+    dyn Fn(Request<V>) -> Pin<Box<dyn Future<Output = Reply>>> + Send + Sync,
 >;
 
 pub(crate) struct RouteStorage<V> {
