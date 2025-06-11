@@ -474,7 +474,10 @@ pub trait JsonRetrieve {
 
 impl JsonRetrieve for String {
     fn parse(key: String, value: Option<&String>) -> Result<Self, JsonParseError> {
-        let val = value.ok_or(JsonParseError::NotFound(key))?;
+        let val = value.ok_or(JsonParseError::NotFound(key.clone()))?;
+        if val.len() < 2 {
+            return Err(JsonParseError::InvalidType(key, "String"));
+        }
         Ok(val[1..val.len() - 1].replace("\\\"", "\"").to_string())
     }
 }
