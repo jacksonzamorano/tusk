@@ -14,7 +14,7 @@ impl<V> RouteBlock<V> {
     pub fn add<H, Fut>(&mut self, method: HttpMethod, path: &str, handler: H)
     where
         H: Fn(Request<V>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Response, RouteError>> + Send + 'static,
+        Fut: Future<Output = Result<Response, RouteError>> + 'static,
     {
         let n_path = if path.starts_with("/") {
             format!("{}{}", self.prefix, path)

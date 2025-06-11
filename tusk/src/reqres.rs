@@ -16,6 +16,7 @@ pub struct RequestParameters {
     pub query: HashMap<String, String>,
     pub headers: HashMap<String, String>,
     pub body: BodyContents,
+    pub ip_address: String
 }
 
 /// An outgoing response. This will be converted to HTTP

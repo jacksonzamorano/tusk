@@ -1,5 +1,5 @@
 use super::{
-    BodyContents, RequestParameters, HttpMethod, Response, ResponseStatusCode, RouteError,
+    BodyContents, HttpMethod, RequestParameters, Response, ResponseStatusCode, RouteError,
 };
 use crate::route_module::{RouteBlock, RouteModule};
 use crate::{config::DatabaseConfig, database::Database};
@@ -176,6 +176,7 @@ impl<V: 'static> Server<V> {
     }
 
     async fn create_request_object(&self, stream: &mut TcpStream) -> RequestParameters {
+        let ip = stream.peer_addr().map(|x| x.ip().to_string()).unwrap_or(String::new());
         let mut buffer = BufReader::new(stream);
         let mut headers_content = String::new();
 
@@ -234,6 +235,7 @@ impl<V: 'static> Server<V> {
                 })
                 .collect(),
             body: BodyContents::None,
+            ip_address: ip
         };
 
         if let Some(content_length_str) = created_request.headers.get("content-length") {
