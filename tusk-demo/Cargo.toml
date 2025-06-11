@@ -10,3 +10,4 @@ tusk-rs-derive = { path = "../tusk-derive" }
 tusk-rs = { path = "../tusk" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 rand = { version = "0.8.5" }
+postgres-types = { version = "0.2.9", features = ["derive"] }

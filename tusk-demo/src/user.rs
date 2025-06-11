@@ -14,7 +14,7 @@ impl RouteModule<ApplicationConfig> for UserModule {
 impl UserModule {
     pub async fn get_all(data: AppRequest) -> Result<Response, RouteError> {
         let users: Vec<User> = data.database.select_all("", &[]).await.unwrap();
-        return Ok(Response::json(&users));
+        Ok(Response::json(&users))
     }
     pub async fn get_all_directory(data: AppRequest) -> Result<Response, RouteError> {
         let org_users: Vec<UserDirectory> = data.database.select_all("", &[]).await.unwrap();

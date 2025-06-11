@@ -34,7 +34,7 @@ pub struct UserDirectory {
 }
 impl PostgresTable for UserDirectory {
     fn table_name() -> &'static str {
-        return "users";
+        "users"
     }
 }
 impl PostgresReadFields for UserDirectory {

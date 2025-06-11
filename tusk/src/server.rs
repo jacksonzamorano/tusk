@@ -65,7 +65,7 @@ impl<V: 'static> Server<V> {
     pub fn register<H, Fut>(&mut self, method: HttpMethod, path: &str, f: H)
     where
         H: Fn(Request<V>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = Result<Response, RouteError>> + Send + 'static,
+        Fut: Future<Output = Result<Response, RouteError>> + 'static,
     {
         self.routes.add(Route::new(
             path.to_string(),

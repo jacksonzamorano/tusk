@@ -6,10 +6,10 @@ pub struct StatusModule;
 
 impl StatusModule {
     async fn get_status(data: AppRequest) -> Result<Response, RouteError> {
-        return Ok(Response::string(format!(
+        Ok(Response::string(format!(
             "ok: {}\n\n",
             data.configuration.is_production
-        )));
+        )))
     }
 }
 impl RouteModule<ApplicationConfig> for StatusModule {

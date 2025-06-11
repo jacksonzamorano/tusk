@@ -24,6 +24,6 @@ pub use urlencoded::{FromUrlEncoded, UrlEncoded};
 /// Re-exports for convience
 pub use chrono;
 pub use tokio;
-pub use tokio_postgres::types;
+pub use tokio_postgres;
 pub use tusk_rs_derive::*;
 pub use uuid;
