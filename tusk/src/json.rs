@@ -580,7 +580,7 @@ impl JsonRetrieve for Uuid {
 }
 impl ToJson for Uuid {
     fn to_json(&self) -> String {
-        format!("\"{}\"", self.to_string())
+        format!("\"{}\"", self)
     }
 }
 

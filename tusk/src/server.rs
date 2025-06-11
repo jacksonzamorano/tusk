@@ -176,7 +176,7 @@ impl<V: 'static> Server<V> {
     }
 
     async fn create_request_object(&self, stream: &mut TcpStream) -> RequestParameters {
-        let ip = stream.peer_addr().map(|x| x.ip().to_string()).unwrap_or(String::new());
+        let ip = stream.peer_addr().map(|x| x.ip().to_string()).unwrap_or_default();
         let mut buffer = BufReader::new(stream);
         let mut headers_content = String::new();
 
