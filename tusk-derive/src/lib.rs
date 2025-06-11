@@ -263,7 +263,7 @@ pub fn derive_to_json(item: TokenStream) -> TokenStream {
                 .iter()
                 .map(|x| {
                     let ident = &x.ident;
-                    let ident_str = format!("\"{}\"", x.ident.to_string());
+                    let ident_str = format!("\"{}\"", x.ident);
                     quote! {
                         Self::#ident => #ident_str.to_string()
                     }
