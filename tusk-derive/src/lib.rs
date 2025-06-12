@@ -301,7 +301,7 @@ pub fn derive_json_retrieve(item: TokenStream) -> TokenStream {
         .iter()
         .map(|x| {
             let name = &x.ident;
-            let str = format!("\"{}\"", x.ident.to_token_stream().to_string());
+            let str = format!("\"{}\"", x.ident.to_token_stream());
             quote! {
                 #str => Ok(Self::#name)
             }
