@@ -1,10 +1,12 @@
 use std::{collections::{HashMap, BTreeMap}};
 
+/// Representation of `application/x-www-form-urlencoded` data.
 #[derive(Debug)]
 pub struct UrlEncoded {
     values: HashMap<String, String>,
 }
 impl UrlEncoded {
+    /// Parse a URL encoded string into a [`UrlEncoded`] structure.
     pub fn from_string(d: String) -> UrlEncoded {
         UrlEncoded {
             values: d
@@ -20,10 +22,12 @@ impl UrlEncoded {
         }
     }
 
+    /// Retrieve a value and convert it via [`FromUrlEncoded`].
     pub fn get<S: AsRef<str>, T: FromUrlEncoded>(&self, key: S) -> Option<T> {
         T::from_url_encoded(&self.values.get(key.as_ref())?.clone().decode_url())
     }
 
+    /// Retrieve nested dictionary-style data.
     pub fn get_dict<S: AsRef<str>>(&self, key: S) -> Option<UrlEncoded> {
         let matched_values = self
             .values
@@ -43,6 +47,7 @@ impl UrlEncoded {
         Some(UrlEncoded::from_string(matched_values))
     }
 
+    /// Retrieve an array of dictionaries encoded in the form data.
     pub fn get_vec_dict<S: AsRef<str>>(&self, key: S) -> Option<Vec<UrlEncoded>> {
         let matched_values = self
             .values
@@ -71,6 +76,7 @@ impl UrlEncoded {
         Some(values.into_values().map(UrlEncoded::from_string).collect::<Vec<_>>())
     }
 
+    /// Retrieve an array of primitive values encoded in the form data.
     pub fn get_vec<S: AsRef<str>, T: FromUrlEncoded>(&self, key: S) -> Option<Vec<T>> {
         let matched_values = self
             .values
@@ -98,7 +104,9 @@ impl UrlEncoded {
     }
 }
 
+/// Trait for types that can be deserialized from a form encoded string value.
 pub trait FromUrlEncoded {
+    /// Attempt to parse `data` into `Self` returning `None` on failure.
     fn from_url_encoded(data: &str) -> Option<Self>
     where
         Self: Sized;

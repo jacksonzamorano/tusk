@@ -13,8 +13,10 @@ use tokio::net::{TcpListener, TcpStream};
 /// The core of Tusk, `Server` is a async/await ready
 /// web server.
 ///
-/// Server accepts a generic type `T`. This type is injected
-/// into all routes as the final argument.
+/// `Server` is generic over `V`, a configuration or state type of your choosing.
+/// A clone of this value is injected into each [`Request`] allowing handlers to
+/// share application state without resorting to global variables.  Because the
+/// type is determined at compile time there is no dynamic dispatch involved.
 pub struct Server<V> {
     routes: RouteStorage<V>,
     listener: TcpListener,
@@ -26,10 +28,11 @@ pub struct Server<V> {
     configuration: Arc<V>,
 }
 impl<V: 'static> Server<V> {
-    /// Create a new server.
-    /// Specify a port, [`DatabaseConfig`], and an async
-    /// function with arguments [`Request`] and a PostgresConn
-    /// (alias for [`Object`]) and returns `T`.
+    /// Create a new server listening on the specified port and backed by the
+    /// provided [`DatabaseConfig`].
+    ///
+    /// `configuration` is any user provided state that will be injected into
+    /// every [`Request`] handled by this server.
     pub async fn new(port: i32, database: DatabaseConfig, configuration: V) -> Server<V> {
         Server {
             routes: RouteStorage::<V>::new(),
@@ -57,7 +60,7 @@ impl<V: 'static> Server<V> {
         self.debugging_enabled = false
     }
 
-    /// Register a [`Route`]. Routes should NOT be registered
+    /// Register a single [`Route`]. Routes should NOT be registered
     /// after calling `Server::start`, as all routes are sorted
     /// for peformance when `start` is called.
     ///
@@ -79,10 +82,11 @@ impl<V: 'static> Server<V> {
     ///
     /// The recommended pattern for this is to break out
     /// related routes into their own module and decorate
-    /// each route with #[route], then export a module function
-    /// which returns a Vec of all the routes within.
-    /// Note that this has no effect on performance, this just
-    /// keeps your code organized.
+    /// each route with `#[route]`, then export a type implementing
+    /// [`RouteModule`] for that collection.  Because the trait is generic over
+    /// `V` it retains access to the same configuration type that the server uses.
+    /// All generics are monomorphized so this organizational layer has zero
+    /// runtime penalty.
     pub fn module<T: RouteModule<V>>(&mut self, prefix: &str, module: T) {
         let applied_prefix = if prefix.ends_with('/') {
             prefix[0..prefix.len()].to_string()
@@ -99,20 +103,19 @@ impl<V: 'static> Server<V> {
         }
     }
 
-    /// Add function that can modify all outgoing requests.
+    /// Add function that can modify all outgoing responses.
     /// Useful for setting headers.
     pub fn set_postfix(&mut self, f: fn(Response) -> Response) {
         self.postfix = Some(f);
     }
 
-    /// Set CORS data
+    /// Configure the CORS headers that will be applied to every response.
     pub fn set_cors(&mut self, origin: &str, headers: &str) {
         self.cors_origin = origin.to_string();
         self.cors_headers = headers.to_string();
     }
 
-    /// Prepares Tusk for serving applications
-    /// and then begins listening.
+    /// Prepare all registered routes and begin listening for connections.
     pub async fn start(mut self) {
         let default_route: ModernRouteHandler<V> =
             Box::new(move |req| Box::pin(Server::default_error(req)));
@@ -175,6 +178,7 @@ impl<V: 'static> Server<V> {
         }
     }
 
+    /// Parse an incoming TCP stream into [`RequestParameters`].
     async fn create_request_object(&self, stream: &mut TcpStream) -> RequestParameters {
         let ip = stream.peer_addr().map(|x| x.ip().to_string()).unwrap_or_default();
         let mut buffer = BufReader::new(stream);
@@ -261,10 +265,12 @@ impl<V: 'static> Server<V> {
         created_request
     }
 
+    /// Fallback handler used when no route matches a request.
     async fn default_error(_: Request<V>) -> Result<Response, RouteError> {
         Ok(Response::string("404 not found").status(ResponseStatusCode::NotFound))
     }
 
+    /// Generate a minimal response for HTTP `OPTIONS` requests.
     pub fn handle_options(&self) -> Response {
         let mut r = Response::data(Vec::new());
         r.apply_cors(&self.cors_origin, &self.cors_headers);

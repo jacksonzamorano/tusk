@@ -42,6 +42,7 @@ impl<T> core::fmt::Debug for Route<T> {
             .finish()
     }
 }
+/// Request passed to each route handler.
 pub struct Request<V> {
     pub parameters: RequestParameters,
     pub database: DatabaseConnection,
@@ -53,6 +54,12 @@ pub type ModernRouteHandler<V> = Box<
     dyn Fn(Request<V>) -> Pin<Box<dyn Future<Output = Reply>>> + Send + Sync,
 >;
 
+/// Internal storage for all registered routes on a [`Server`](crate::Server).
+///
+/// Routes are grouped by [`HttpMethod`] and stored in separate vectors.  The
+/// vectors are sorted once with [`RouteStorage::prep`], allowing route lookups
+/// with a binary search.  This keeps handler retrieval to `O(log n)` even as
+/// your application grows.
 pub(crate) struct RouteStorage<V> {
     routes_get: Vec<Route<V>>,
     routes_post: Vec<Route<V>>,
@@ -63,6 +70,7 @@ pub(crate) struct RouteStorage<V> {
 }
 
 impl<T> RouteStorage<T> {
+    /// Create an empty [`RouteStorage`].
     pub(crate) fn new() -> RouteStorage<T> {
         RouteStorage {
             routes_get: Vec::new(),
@@ -74,6 +82,10 @@ impl<T> RouteStorage<T> {
         }
     }
 
+    /// Retrieve the route for the given method and path, if one exists.
+    ///
+    /// Because the route lists are kept sorted, lookups use `binary_search_by`
+    /// and therefore scale logarithmically with the number of routes.
     pub(crate) fn handler(&self, request_type: &HttpMethod, path: &String) -> Option<&Route<T>> {
         let handler_cat = match request_type {
             HttpMethod::Get => &self.routes_get,
@@ -95,6 +107,7 @@ impl<T> RouteStorage<T> {
             None
         }
     }
+    /// Add a new route to this storage.
     pub(crate) fn add(&mut self, route: Route<T>) {
         let handler_cat = match route.request_type {
             HttpMethod::Get => &mut self.routes_get,
@@ -107,6 +120,10 @@ impl<T> RouteStorage<T> {
         handler_cat.push(route);
     }
 
+    /// Sort routes for efficient lookup. Called automatically by the server
+    /// before it starts listening.
+    ///
+    /// Sorting occurs only once so there is no runtime cost after startup.
     pub(crate) fn prep(&mut self) {
         self.routes_get.sort_by(|a, b| a.path.cmp(&b.path));
         self.routes_post.sort_by(|a, b| a.path.cmp(&b.path));
