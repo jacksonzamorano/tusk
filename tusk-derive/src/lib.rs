@@ -1,3 +1,4 @@
+//! Procedural macros used by the [`tusk-rs`](https://crates.io/crates/tusk-rs) library.
 #[macro_use]
 extern crate quote;
 extern crate proc_macro;
@@ -9,6 +10,7 @@ use syn::{
     ItemStruct,
 };
 
+/// Derive the [`tusk_rs::FromPostgres`] trait for a struct.
 #[proc_macro_derive(FromPostgres)]
 pub fn derive_from_postgres(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -50,6 +52,7 @@ pub fn derive_from_postgres(item: TokenStream) -> TokenStream {
     }.into()
 }
 
+/// Derive a default implementation of [`tusk_rs::PostgresJoins`] which returns no joins.
 #[proc_macro_derive(PostgresJoins)]
 pub fn derive_postgres_joins(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -65,6 +68,7 @@ pub fn derive_postgres_joins(item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Derive [`tusk_rs::PostgresReadFields`] by reading all struct fields.
 #[proc_macro_derive(PostgresReadFields)]
 pub fn derive_postgres_read_fields(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -91,6 +95,7 @@ pub fn derive_postgres_read_fields(item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Blanket derive for [`tusk_rs::PostgresReadable`].
 #[proc_macro_derive(PostgresReadable)]
 pub fn derive_postgres_readable(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -102,6 +107,7 @@ pub fn derive_postgres_readable(item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Derive [`tusk_rs::PostgresWriteFields`] by using all struct fields.
 #[proc_macro_derive(PostgresWriteFields)]
 pub fn derive_postgres_write_fields(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -122,6 +128,7 @@ pub fn derive_postgres_write_fields(item: TokenStream) -> TokenStream {
     }
     .into()
 }
+/// Derive [`tusk_rs::PostgresWriteable`] for a struct so it can be inserted or updated.
 #[proc_macro_derive(PostgresWriteable)]
 pub fn derive_postgres_writeable(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
@@ -284,6 +291,8 @@ pub fn derive_to_json(item: TokenStream) -> TokenStream {
     }
 }
 
+/// Derive [`tusk_rs::JsonRetrieve`] for an enum. Each variant name is expected
+/// to match its string representation in JSON.
 #[proc_macro_derive(JsonRetrieve)]
 pub fn derive_json_retrieve(item: TokenStream) -> TokenStream {
     let enm = parse_macro_input!(item as ItemEnum);
@@ -316,6 +325,7 @@ pub fn derive_json_retrieve(item: TokenStream) -> TokenStream {
     .into()
 }
 
+/// Derive [`tusk_rs::FromJson`] for a struct.
 #[proc_macro_derive(FromJson)]
 pub fn derive_from_json(item: TokenStream) -> TokenStream {
     let strct = parse_macro_input!(item as ItemStruct);

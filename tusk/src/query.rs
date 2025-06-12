@@ -189,7 +189,10 @@ pub struct PostgresWrite {
     pub arguments: Vec<Box<(dyn ToSql + Sync)>>,
 }
 impl PostgresWrite {
-    /// Converts the write struct into an insert statement
+    /// Convert this write into a regular `INSERT` statement.
+    ///
+    /// The returned tuple contains the query string and argument slice to pass
+    /// to [`DatabaseConnection::query`].
     pub fn into_insert(&self, table_name: &str) -> (String, Vec<&(dyn ToSql + Sync)>) {
         (
             format!(
@@ -207,7 +210,8 @@ impl PostgresWrite {
                 .collect::<Vec<&(dyn ToSql + Sync)>>(),
         )
     }
-    /// Converts the write struct into a bulk insert statement
+    /// Convert this write into a bulk `INSERT` statement capable of inserting
+    /// multiple rows.
     pub fn into_bulk_insert(&self, table_name: &str) -> (String, Vec<&(dyn ToSql + Sync)>) {
         if self.arguments.len() % self.fields.len() != 0 {
             panic!("For a bulk insert, arguments % fields must be 0.")
@@ -234,7 +238,9 @@ impl PostgresWrite {
                 .collect::<Vec<&(dyn ToSql + Sync)>>(),
         )
     }
-    /// Converts the write struct into an update statement
+    /// Convert this write into an `UPDATE` statement. `arg_offset` specifies how
+    /// many parameters are already bound in the generated query (useful when
+    /// combining with a `WHERE` clause).
     pub fn into_update(
         &self,
         table_name: &str,

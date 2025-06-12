@@ -407,6 +407,7 @@ impl BodyContents {
     const TYPE_LD_JSON: &'static str = "application/ld+json";
     const TYPE_PLAIN_TEXT: &'static str = "text/plain";
 
+    /// Convert raw bytes and a mime type into a [`BodyContents`] variant.
     pub fn type_from_mime(mime: &str, data: Vec<u8>) -> BodyContents {
         match mime {
             BodyContents::TYPE_OCTET_STREAM => BodyContents::Binary(data),
@@ -428,42 +429,50 @@ impl BodyContents {
         }
     }
 
+    /// Interpret this body as a JSON object.
     pub fn to_json_object(&self) -> Result<&JsonObject, RouteError> {
         match self {
             BodyContents::JsonObject(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected JSON object.")),
         }
     }
+    /// Interpret this body as a JSON array.
     pub fn to_json_array(&self) -> Result<&JsonArray, RouteError> {
         match self {
             BodyContents::JsonArray(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected JSON array.")),
         }
     }
+    /// Consume the body and return a JSON object.
     pub fn into_json_object(self) -> Result<JsonObject, RouteError> {
         match self {
             BodyContents::JsonObject(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected JSON object.")),
         }
     }
+    /// Consume the body and return a JSON array.
     pub fn into_json_array(self) -> Result<JsonArray, RouteError> {
         match self {
             BodyContents::JsonArray(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected JSON array")),
         }
     }
+    /// Interpret this body as URL encoded form data.
     pub fn url_encoded(&self) -> Result<&UrlEncoded, RouteError> {
         match self {
             BodyContents::UrlEncoded(j) => Ok(j),
             _ => Err(RouteError::bad_request("Expected URL encoded data.")),
         }
     }
+    /// Consume the body converting it to URL encoded form data. Returns an empty
+    /// structure if the body was of another type.
     pub fn as_url_encoded(self) -> UrlEncoded {
         match self {
             BodyContents::UrlEncoded(j) => j,
             _ => UrlEncoded::from_string("".to_string()),
         }
     }
+    /// Consume the body returning the raw bytes.
     pub fn as_bytes(self) -> Vec<u8> {
         match self {
             BodyContents::Binary(j) => j,
@@ -472,6 +481,7 @@ impl BodyContents {
     }
 }
 
+/// Enum representing supported HTTP methods.
 #[derive(Debug)]
 #[derive(PartialEq)]
 pub enum HttpMethod {
@@ -493,6 +503,7 @@ impl HttpMethod {
     const ANY_TYPE: &'static str = "ANY";
     const OPTIONS_TYPE: &'static str = "OPTIONS";
 
+    /// Convert a string method from the HTTP request line into an `HttpMethod`.
     pub fn type_for_method(method: &str) -> HttpMethod {
         match method {
             HttpMethod::GET_TYPE => HttpMethod::Get,
@@ -505,6 +516,7 @@ impl HttpMethod {
         }
     }
 
+    /// Returns `true` if this method is [`HttpMethod::Any`].
     pub fn is_any(&self) -> bool {
         matches!(self, HttpMethod::Any)
     }
