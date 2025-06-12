@@ -202,7 +202,7 @@ enum QueryComponent<T: ColumnKeys> {
     Offset(i32),
 }
 impl<T: ColumnKeys> QueryComponent<T> {
-    fn to_string(&self) -> String {
+    fn to_query(&self) -> String {
         match self {
             Self::Filter(param) => {
                 format!("{} {} ${}", param.key.name(), param.condition, param.arg)
@@ -214,10 +214,7 @@ impl<T: ColumnKeys> QueryComponent<T> {
         }
     }
     fn is_filter(&self) -> bool {
-        match self {
-            Self::Filter(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Filter(_))
     }
 }
 
@@ -261,7 +258,7 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
     /// Filter results where the provided column equals the value.
     pub fn where_eq(mut self, key: T::ReadKeys, val: &'a (dyn ToSql + Sync)) -> Self {
         self.filters.push(QueryComponent::Filter(QueryParam {
-            key: key,
+            key,
             condition: "=".to_string(),
             arg: self.args.len() + 1,
         }));
@@ -271,7 +268,7 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
     /// Filter results where the provided column does not equal the value.
     pub fn where_ne(mut self, key: T::ReadKeys, val: &'a (dyn ToSql + Sync)) -> Self {
         self.filters.push(QueryComponent::Filter(QueryParam {
-            key: key,
+            key,
             condition: "<>".to_string(),
             arg: self.args.len() + 1,
         }));
@@ -317,7 +314,7 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
                 },
                 self.filters
                     .iter()
-                    .map(|x| x.to_string())
+                    .map(|x| x.to_query())
                     .collect::<Vec<_>>()
                     .join(" ")
             )
