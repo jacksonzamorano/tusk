@@ -5,10 +5,7 @@ extern crate proc_macro;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, ToTokens};
-use syn::{
-    parse_macro_input, Data, DeriveInput, ItemEnum,
-    ItemStruct,
-};
+use syn::{parse_macro_input, Data, DeriveInput, ItemEnum, ItemStruct};
 
 /// Derive the [`tusk_rs::FromPostgres`] trait for a struct.
 #[proc_macro_derive(FromPostgres)]
@@ -304,7 +301,7 @@ pub fn derive_json_retrieve(item: TokenStream) -> TokenStream {
         .iter()
         .map(|x| {
             let name = &x.ident;
-            let str = x.ident.to_token_stream().to_string();
+            let str = format!("\"{}\"", x.ident.to_token_stream().to_string());
             quote! {
                 #str => Ok(Self::#name)
             }
