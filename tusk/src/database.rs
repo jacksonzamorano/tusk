@@ -174,14 +174,20 @@ pub struct QueryBuilder<'a, T: Columned> {
     args: Vec<&'a (dyn ToSql + Sync)>,
     pd: PhantomData<T>,
 }
+impl<T: Columned> Default for QueryBuilder<'_, T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a, T: Columned> QueryBuilder<'a, T> {
     pub fn new() -> QueryBuilder<'a, T> {
-        return QueryBuilder {
+        QueryBuilder {
             set: Vec::new(),
             query: Vec::new(),
             args: Vec::new(),
             pd: PhantomData {},
-        };
+        }
     }
     pub fn set(mut self, key: T::Keys, val: &'a (dyn ToSql + Sync)) -> Self {
         self.set
@@ -551,7 +557,7 @@ impl DatabaseConnection {
                 args,
             )
             .await?;
-        return Ok(());
+        Ok(())
     }
 }
 
