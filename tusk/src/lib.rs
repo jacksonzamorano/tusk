@@ -9,7 +9,7 @@ pub mod server;
 pub mod urlencoded;
 
 pub use config::DatabaseConfig;
-pub use database::{Database, DatabaseConnection, DatabaseError};
+pub use database::*;
 pub use json::*;
 pub use query::*;
 pub use reqres::{
