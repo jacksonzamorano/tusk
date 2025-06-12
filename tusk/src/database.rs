@@ -31,7 +31,9 @@ macro_rules! expect {
 #[macro_export]
 macro_rules! expect_obj {
     ($obj:literal, $query:expr) => {
-        $query.ok_or_else(|| RouteError::not_found(&format!("The {} you requested was not found.", $obj)))?
+        $query.ok_or_else(|| {
+            RouteError::not_found(&format!("The {} you requested was not found.", $obj))
+        })?
     };
 }
 
@@ -136,6 +138,7 @@ impl From<PostgresReadError> for RouteError {
 /// Errors that may occur when writing to Postgres.
 #[derive(Debug)]
 pub enum PostgresWriteError {
+    NoWhereProvided,
     InsertValueCountMismatch,
     // (Constraint, Detail)
     UniqueConstraintViolation(String, String),
@@ -198,6 +201,9 @@ pub struct QueryBuilder<'a, T: Columned> {
     set: Vec<String>,
     query: Vec<String>,
     args: Vec<&'a (dyn ToSql + Sync)>,
+    limit: Option<i32>,
+    offset: Option<i32>,
+    force: bool,
     pd: PhantomData<T>,
 }
 impl<T: Columned> Default for QueryBuilder<'_, T> {
@@ -213,6 +219,9 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
             set: Vec::new(),
             query: Vec::new(),
             args: Vec::new(),
+            limit: None,
+            offset: None,
+            force: false,
             pd: PhantomData {},
         }
     }
@@ -248,26 +257,62 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
         self.query.push("OR".to_string());
         self
     }
+    /// Apply a limit
+    pub fn limit(mut self, val: i32) -> Self {
+        self.limit = Some(val);
+        self
+    }
+    /// Apply an offset
+    pub fn offset(mut self, val: i32) -> Self {
+        self.offset = Some(val);
+        self
+    }
+    /// By default, write operations without a "WHERE" clause
+    /// will be rejected. Call this function
+    /// to force it to work.
+    pub fn force(mut self) -> Self {
+        self.force = true;
+        self
+    }
     /// Select one will fetch an object from the database, and return an Option indicating whether it's
     /// been found.
     pub async fn get(self, db: &DatabaseConnection) -> Result<Option<T>, PostgresReadError> {
-        db.get(
-            &format!("WHERE {}", self.query.join(" ")),
-            self.args.as_slice(),
-        )
-        .await
+        let query = if !self.query.is_empty() {
+            format!("WHERE {} ", self.query.join(" "))
+        } else {
+            String::new()
+        };
+        db.get(&format!(" {}", query), self.args.as_slice()).await
     }
     /// Select all will fetch many objects from the database, and return a Vec. If no options are
     /// found, an empty Vec is returned.
     pub async fn select_all(self, db: &DatabaseConnection) -> Result<Vec<T>, PostgresReadError> {
+        let limit_string = if let Some(limit) = self.limit {
+            format!(" LIMIT {}", limit)
+        } else {
+            String::new()
+        };
+        let offset_string = if let Some(offset) = self.offset {
+            format!(" OFFSET {}", offset)
+        } else {
+            String::new()
+        };
+        let query = if !self.query.is_empty() {
+            format!("WHERE {} ", self.query.join(" "))
+        } else {
+            String::new()
+        };
         db.select(
-            &format!("WHERE {}", self.query.join(" ")),
+            &format!(" {}{}{}", query, limit_string, offset_string),
             self.args.as_slice(),
         )
         .await
     }
     /// Delete all rows matching the built where clause.
     pub async fn delete(self, db: &DatabaseConnection) -> Result<(), PostgresWriteError> {
+        if self.query.is_empty() && !self.force {
+            return Err(PostgresWriteError::NoWhereProvided);
+        }
         db.delete::<T>(
             &format!("WHERE {}", self.query.join(" ")),
             self.args.as_slice(),
@@ -276,6 +321,9 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
     }
     /// Update rows and return the first updated record.
     pub async fn update_one(self, db: &DatabaseConnection) -> Result<T, PostgresWriteError> {
+        if self.query.is_empty() && !self.force {
+            return Err(PostgresWriteError::NoWhereProvided);
+        }
         db.update_one(
             &format!("{} WHERE {}", self.set.join(", "), self.query.join(" ")),
             self.args.as_slice(),
@@ -284,6 +332,9 @@ impl<'a, T: Columned> QueryBuilder<'a, T> {
     }
     /// Update rows and return all updated records.
     pub async fn update_many(self, db: &DatabaseConnection) -> Result<Vec<T>, PostgresWriteError> {
+        if self.query.is_empty() && !self.force {
+            return Err(PostgresWriteError::NoWhereProvided);
+        }
         db.update_many(
             &format!("{} WHERE {}", self.set.join(", "), self.query.join(" ")),
             self.args.as_slice(),
