@@ -138,7 +138,7 @@ pub fn derive_postgres_writeable(item: TokenStream) -> TokenStream {
             let f = field.ident.as_ref().unwrap();
             let f_name = field.ident.as_ref().unwrap().to_string();
             quote! {
-                #f_name => Box::new(std::mem::take(&mut self.#f))
+                #f_name => Box::new(self.#f.clone())
             }
         })
         .collect::<Vec<_>>();
